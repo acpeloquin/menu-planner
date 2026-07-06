@@ -4,6 +4,7 @@ import Layout from '@/components/Layout';
 import Login from '@/pages/Login';
 import Deals from '@/pages/Deals';
 import Stores from '@/pages/Stores';
+import MealPlanPage from '@/pages/MealPlan';
 
 function ProtectedRoutes() {
   const { user, loading } = useAuth();
@@ -20,6 +21,7 @@ function ProtectedRoutes() {
     <Routes>
       <Route element={<Layout />}>
         <Route index element={<Deals />} />
+        <Route path="menu" element={<MealPlanPage />} />
         <Route path="stores" element={<Stores />} />
       </Route>
     </Routes>

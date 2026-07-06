@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 
 const navItems = [
   { to: '/', label: 'Aubaines' },
+  { to: '/menu', label: 'Menu' },
   { to: '/stores', label: 'Magasins' },
 ];
 
@@ -14,7 +15,7 @@ export default function Layout() {
   return (
     <div className="min-h-screen flex flex-col">
       <header className="border-b">
-        <div className="mx-auto max-w-3xl px-4 py-3 flex items-center justify-between">
+        <div className="mx-auto max-w-3xl px-4 py-3 flex flex-wrap items-center justify-between gap-y-2">
           <nav className="flex gap-4">
             {navItems.map((item) => (
               <NavLink
@@ -30,7 +31,7 @@ export default function Layout() {
             ))}
           </nav>
           <div className="flex items-center gap-3">
-            <span className="text-xs text-muted-foreground">{user?.email}</span>
+            <span className="hidden sm:inline text-xs text-muted-foreground">{user?.email}</span>
             <Button variant="ghost" size="sm" onClick={() => signOut()}>
               Déconnexion
             </Button>
