@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 const navItems = [
   { to: '/', label: 'Aubaines' },
   { to: '/menu', label: 'Menu' },
+  { to: '/epicerie', label: 'Épicerie' },
   { to: '/stores', label: 'Magasins' },
 ];
 
@@ -14,7 +15,7 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <header className="border-b">
+      <header className="border-b print:hidden">
         <div className="mx-auto max-w-3xl px-4 py-3 flex flex-wrap items-center justify-between gap-y-2">
           <nav className="flex gap-4">
             {navItems.map((item) => (
