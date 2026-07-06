@@ -26,5 +26,5 @@ verify_jwt = true
 [functions.analyze-pantry-photo]
 verify_jwt = true
 
-[functions.scrape-marche-dessaulles]
+[functions.scrape-store]
 verify_jwt = false

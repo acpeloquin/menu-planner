@@ -1,6 +1,7 @@
 import { corsHeaders } from '../_shared/cors.ts';
 import { createAdminClient } from '../_shared/supabase-admin.ts';
 import { callClaude } from '../_shared/anthropic.ts';
+import { RECIPE_SEARCH_TOOLS_LIGHT, RECIPE_SITES_DESCRIPTION } from '../_shared/recipe-search.ts';
 
 interface RegenerateMealRequest {
   mealPlanId: string;
@@ -54,11 +55,21 @@ Deno.serve(async (req) => {
       .select('ingredient_name, quantity, unit')
       .eq('user_id', mealPlan.user_id);
 
-    const prompt = `Génère une seule recette de type "${mealType}" pour ${mealPlan.servings} portions, régime "${mealPlan.diets?.name ?? 'omnivore'}", préférences: ${mealPlan.preferences ?? 'aucune'}. Priorise ces aubaines si pertinent: ${JSON.stringify(activeDeals ?? [])}.
-Voici ce que l'utilisateur a déjà dans son garde-manger/frigo — priorise cette recette pour utiliser ces ingrédients si c'est cohérent avec le type de repas et le régime: ${JSON.stringify(pantryItems ?? [])}.
-Réponds uniquement avec un objet JSON: {"title": string, "ingredients": [{"name": string, "quantity": number, "unit": string}], "steps": string, "prep_time_minutes": number, "diet_tags": string[]}`;
+    const prompt = `Fais UNE recherche web (un seul appel, pas plus) pour trouver une vraie recette de type
+"${mealType}" pour ${mealPlan.servings} portions, régime "${mealPlan.diets?.name ?? 'omnivore'}",
+préférences: ${mealPlan.preferences ?? 'aucune'}, sur l'un de ces sites : ${RECIPE_SITES_DESCRIPTION}.
+Priorise ces aubaines si pertinent: ${JSON.stringify(activeDeals ?? [])}.
+Voici ce que l'utilisateur a déjà dans son garde-manger/frigo — priorise cette recette pour utiliser ces
+ingrédients si c'est cohérent avec le type de repas et le régime: ${JSON.stringify(pantryItems ?? [])}.
+Important pour la rapidité : si le résumé retourné par la recherche donne déjà assez de détails
+(ingrédients et étapes), n'ouvre PAS la page complète — construis la recette directement à partir de ce
+résumé. N'utilise l'outil de récupération de page qu'en dernier recours si le résumé est vraiment
+insuffisant. Si la recherche ne donne rien d'adéquat, compose une recette toi-même sans chercher davantage
+(laisse alors "source_url" à null).
+Réponds uniquement avec un objet JSON (aucun texte avant ou après):
+{"title": string, "ingredients": [{"name": string, "quantity": number, "unit": string}], "steps": string, "prep_time_minutes": number, "diet_tags": string[], "source_url": string|null}`;
 
-    const raw = await callClaude(prompt, { maxTokens: 2048 });
+    const raw = await callClaude(prompt, { maxTokens: 4096, tools: RECIPE_SEARCH_TOOLS_LIGHT });
     const item = JSON.parse(extractJson(raw));
 
     const { data: recipe, error: recipeError } = await supabase
@@ -70,6 +81,7 @@ Réponds uniquement avec un objet JSON: {"title": string, "ingredients": [{"name
         prep_time_minutes: item.prep_time_minutes,
         diet_tags: item.diet_tags ?? null,
         source: 'ai_generated',
+        source_url: item.source_url ?? null,
       })
       .select('id')
       .single();

@@ -90,6 +90,7 @@ export interface Recipe {
   prep_time_minutes: number | null;
   diet_tags: string[] | null;
   source: RecipeSource;
+  source_url: string | null;
   created_by: string | null;
   created_at: string;
 }

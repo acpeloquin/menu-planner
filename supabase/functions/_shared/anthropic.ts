@@ -8,6 +8,8 @@ interface CallClaudeOptions {
     base64: string;
     mediaType: string;
   };
+  // deno-lint-ignore no-explicit-any
+  tools?: any[];
 }
 
 // Appel direct à l'API Messages d'Anthropic depuis l'edge function.
@@ -38,6 +40,7 @@ export async function callClaude(prompt: string, options: CallClaudeOptions = {}
       model: DEFAULT_MODEL,
       max_tokens: options.maxTokens ?? 4096,
       system: options.system,
+      tools: options.tools,
       messages: [{ role: 'user', content }],
     }),
   });
@@ -48,9 +51,10 @@ export async function callClaude(prompt: string, options: CallClaudeOptions = {}
   }
 
   const data = await response.json();
-  // claude-sonnet-5 can emit a leading "thinking" content block before the
-  // actual text block, so pick the first block of type "text" rather than
-  // assuming index 0.
-  const textBlock = data.content?.find((block: { type: string; text?: string }) => block.type === 'text');
-  return textBlock?.text ?? '';
+  // claude-sonnet-5 can emit a leading "thinking" block, and with server-side
+  // tools (web_search/web_fetch) the response interleaves several text blocks
+  // with tool-use/tool-result blocks — the final synthesized answer is always
+  // the LAST text block, not the first.
+  const textBlocks = (data.content ?? []).filter((block: { type: string; text?: string }) => block.type === 'text');
+  return textBlocks.length > 0 ? textBlocks[textBlocks.length - 1].text ?? '' : '';
 }

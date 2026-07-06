@@ -1,6 +1,7 @@
 import { corsHeaders } from '../_shared/cors.ts';
 import { createAdminClient } from '../_shared/supabase-admin.ts';
 import { callClaude } from '../_shared/anthropic.ts';
+import { RECIPE_SEARCH_TOOLS_LIGHT, RECIPE_SITES_DESCRIPTION } from '../_shared/recipe-search.ts';
 
 interface GenerateMenuRequest {
   mealPlanId: string;
@@ -10,6 +11,14 @@ interface GenerateMenuRequest {
 // le régime et les préférences, appelle Claude, puis insère recipes +
 // meal_plan_recipes. Les repas verrouillés (is_locked=true) ne sont jamais
 // régénérés par cette fonction.
+//
+// La génération de base se fait SANS recherche web (rapide et fiable — les
+// edge functions Supabase ont une limite d'inactivité de ~150s, et chercher
+// une vraie recette pour chaque repas dépasse largement ce budget pour un
+// menu de plusieurs repas). Un seul repas est ensuite "ancré" dans une vraie
+// recette via recherche web (même approche que regenerate-meal), en tâche
+// best-effort : si ça échoue ou prend trop de temps, on garde la version
+// composée par l'IA plutôt que de faire échouer toute la génération.
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -47,9 +56,10 @@ Deno.serve(async (req) => {
       .eq('user_id', mealPlan.user_id);
 
     const prompt = buildMenuPrompt(mealPlan, activeDeals ?? [], lockedRecipes ?? [], pantryItems ?? []);
-    const raw = await callClaude(prompt, { maxTokens: 8192 });
+    const raw = await callClaude(prompt, { maxTokens: 16000 });
     const generated = JSON.parse(extractJson(raw));
 
+    let firstRecipeId: string | null = null;
     for (const item of generated.meals) {
       const { data: recipe, error: recipeError } = await supabase
         .from('recipes')
@@ -64,6 +74,7 @@ Deno.serve(async (req) => {
         .select('id')
         .single();
       if (recipeError || !recipe) throw recipeError ?? new Error('Échec de création de la recette');
+      firstRecipeId ??= recipe.id;
 
       await supabase.from('meal_plan_recipes').upsert(
         {
@@ -75,6 +86,16 @@ Deno.serve(async (req) => {
         },
         { onConflict: 'meal_plan_id,day_index,meal_type' },
       );
+    }
+
+    // Meilleur effort : ancre UN repas dans une vraie recette trouvée par recherche
+    // web. Ne doit jamais faire échouer la génération du menu si ça timeout/échoue.
+    if (firstRecipeId && generated.meals.length > 0) {
+      try {
+        await groundOneRecipeInRealSource(supabase, firstRecipeId, generated.meals[0], mealPlan);
+      } catch (_err) {
+        // best-effort : on garde la recette composée par l'IA pour ce repas
+      }
     }
 
     await supabase.from('meal_plans').update({ status: 'ready' }).eq('id', mealPlanId);
@@ -89,6 +110,41 @@ Deno.serve(async (req) => {
     });
   }
 });
+
+// deno-lint-ignore no-explicit-any
+async function groundOneRecipeInRealSource(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  recipeId: string,
+  // deno-lint-ignore no-explicit-any
+  meal: any,
+  // deno-lint-ignore no-explicit-any
+  mealPlan: any,
+): Promise<void> {
+  const prompt = `Fais UNE recherche web (un seul appel) pour trouver une vraie recette de type
+"${meal.meal_type}" similaire à "${meal.title}", pour ${mealPlan.servings} portions, régime
+"${mealPlan.diets?.name ?? 'omnivore'}", sur l'un de ces sites : ${RECIPE_SITES_DESCRIPTION}.
+Si le résumé de recherche donne assez de détails, construis la recette à partir de ce résumé
+sans ouvrir la page complète. Réponds uniquement avec un objet JSON (aucun texte avant/après),
+ou {"source_url": null} si rien d'adéquat n'est trouvé :
+{"title": string, "ingredients": [{"name": string, "quantity": number, "unit": string}], "steps": string, "prep_time_minutes": number, "diet_tags": string[], "source_url": string|null}`;
+
+  const raw = await callClaude(prompt, { maxTokens: 4096, tools: RECIPE_SEARCH_TOOLS_LIGHT });
+  const found = JSON.parse(extractJson(raw));
+  if (!found.source_url) return;
+
+  await supabase
+    .from('recipes')
+    .update({
+      title: found.title,
+      ingredients: found.ingredients,
+      steps: found.steps,
+      prep_time_minutes: found.prep_time_minutes,
+      diet_tags: found.diet_tags ?? null,
+      source_url: found.source_url,
+    })
+    .eq('id', recipeId);
+}
 
 // deno-lint-ignore no-explicit-any
 function buildMenuPrompt(mealPlan: any, deals: any[], lockedRecipes: any[], pantryItems: any[]): string {

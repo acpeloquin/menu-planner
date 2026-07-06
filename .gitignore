@@ -6,3 +6,6 @@ dist/
 supabase/.temp/
 *.tsbuildinfo
 .supabase-db-password.txt
+
+# Local Netlify folder
+.netlify

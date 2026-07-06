@@ -35,16 +35,19 @@ Déployer les fonctions :
 npx supabase functions deploy parse-deal-text
 npx supabase functions deploy generate-menu
 npx supabase functions deploy regenerate-meal
-npx supabase functions deploy scrape-marche-dessaulles --no-verify-jwt
+npx supabase functions deploy analyze-pantry-photo
+npx supabase functions deploy generate-grocery-list
+npx supabase functions deploy scrape-store --no-verify-jwt
 ```
 
-### 3. Cron du scraper Dessaulles
+### 3. Cron des scrapers de circulaires
 
-`supabase/migrations/0002_schedule_scraper_cron.sql` active `pg_cron`/`pg_net`
-et planifie `scrape-marche-dessaulles` à 10h00 UTC (6h HAE) chaque jour via
-`net.http_post`. Le site Dessaulles utilise un cache WP Rocket : le contenu
-peut prendre 1-2 jours à se mettre à jour après un changement de circulaire,
-donc un scrape quotidien est largement suffisant.
+`scrape-store` est un dispatcher générique : il scrape tous les magasins qui ont
+un `connector_slug` enregistré dans `supabase/functions/scrape-store/connectors/registry.ts`
+(un seul appel, pas une fonction par magasin). `supabase/migrations/0005_generic_scraper_cron.sql`
+active `pg_cron`/`pg_net` et planifie `scrape-store` à 10h00 UTC (6h HAE) chaque
+jour via `net.http_post`. La plupart des sites de circulaires mettent 1-2 jours
+à refléter un changement (cache), donc un scrape quotidien suffit largement.
 
 La clé service_role utilisée par le cron job est lue depuis Supabase Vault,
 jamais commitée en clair. Étape manuelle unique par projet (avant de pousser
@@ -70,11 +73,20 @@ Netlify (build only, ces valeurs publiques sont protégées par RLS côté Supab
 - `supabase/functions/` — edge functions (parsing IA, génération de menu,
   connecteurs de scraping par magasin)
 
-## Ajouter un nouveau connecteur de scraping
+## Ajouter un nouveau connecteur de scraping (nouvelle épicerie)
 
-1. Créer `supabase/functions/scrape-<magasin>/connectors/<magasin>.ts`
-   implémentant `ScrapeStore` (voir `scrape-marche-dessaulles/connectors/types.ts`)
-2. Vérifier le `robots.txt` du site avant d'ajouter le connecteur
-3. Ajouter une entrée dans `stores` avec le `connector_slug` correspondant
-4. Ajouter la fonction au cron
+Pas besoin de créer une nouvelle edge function ni une nouvelle entrée de cron —
+le dispatcher générique `scrape-store` s'en charge pour tous les magasins
+enregistrés :
+
+1. Vérifier le `robots.txt` du site avant d'ajouter le connecteur
+2. Créer `supabase/functions/scrape-store/connectors/<magasin>.ts` implémentant
+   `ScrapeStore` (voir `connectors/types.ts` pour l'interface commune, et
+   `connectors/marche-dessaulles.ts` comme exemple)
+3. L'enregistrer dans `connectors/registry.ts` : `{ mon_magasin: scrapeMonMagasin }`
+4. Ajouter une entrée dans `stores` avec `connector_slug = 'mon_magasin'`
+5. Redéployer : `npx supabase functions deploy scrape-store --no-verify-jwt`
+
+Pour tester un seul connecteur sans attendre le cron :
+`curl -X POST .../functions/v1/scrape-store -d '{"storeSlug": "mon_magasin"}'`
 

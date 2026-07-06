@@ -282,6 +282,16 @@ export default function MealPlanPage() {
                               ~{mpr.recipes.prep_time_minutes} min
                             </p>
                           )}
+                          {mpr.recipes.source_url && (
+                            <a
+                              href={mpr.recipes.source_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-xs text-primary underline"
+                            >
+                              Voir la recette originale
+                            </a>
+                          )}
                         </div>
                         <div className="flex gap-2">
                           <Button
