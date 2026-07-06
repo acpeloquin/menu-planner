@@ -77,3 +77,4 @@ Netlify (build only, ces valeurs publiques sont protégées par RLS côté Supab
 2. Vérifier le `robots.txt` du site avant d'ajouter le connecteur
 3. Ajouter une entrée dans `stores` avec le `connector_slug` correspondant
 4. Ajouter la fonction au cron
+
