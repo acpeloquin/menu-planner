@@ -49,7 +49,13 @@ Deno.serve(async (req) => {
       .lte('valid_from', today)
       .gte('valid_to', today);
 
+    const { data: pantryItems } = await supabase
+      .from('pantry_items')
+      .select('ingredient_name, quantity, unit')
+      .eq('user_id', mealPlan.user_id);
+
     const prompt = `Génère une seule recette de type "${mealType}" pour ${mealPlan.servings} portions, régime "${mealPlan.diets?.name ?? 'omnivore'}", préférences: ${mealPlan.preferences ?? 'aucune'}. Priorise ces aubaines si pertinent: ${JSON.stringify(activeDeals ?? [])}.
+Voici ce que l'utilisateur a déjà dans son garde-manger/frigo — priorise cette recette pour utiliser ces ingrédients si c'est cohérent avec le type de repas et le régime: ${JSON.stringify(pantryItems ?? [])}.
 Réponds uniquement avec un objet JSON: {"title": string, "ingredients": [{"name": string, "quantity": number, "unit": string}], "steps": string, "prep_time_minutes": number, "diet_tags": string[]}`;
 
     const raw = await callClaude(prompt, { maxTokens: 2048 });

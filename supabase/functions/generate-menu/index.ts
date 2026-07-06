@@ -41,7 +41,12 @@ Deno.serve(async (req) => {
       .eq('meal_plan_id', mealPlanId)
       .eq('is_locked', true);
 
-    const prompt = buildMenuPrompt(mealPlan, activeDeals ?? [], lockedRecipes ?? []);
+    const { data: pantryItems } = await supabase
+      .from('pantry_items')
+      .select('ingredient_name, quantity, unit')
+      .eq('user_id', mealPlan.user_id);
+
+    const prompt = buildMenuPrompt(mealPlan, activeDeals ?? [], lockedRecipes ?? [], pantryItems ?? []);
     const raw = await callClaude(prompt, { maxTokens: 8192 });
     const generated = JSON.parse(extractJson(raw));
 
@@ -86,7 +91,7 @@ Deno.serve(async (req) => {
 });
 
 // deno-lint-ignore no-explicit-any
-function buildMenuPrompt(mealPlan: any, deals: any[], lockedRecipes: any[]): string {
+function buildMenuPrompt(mealPlan: any, deals: any[], lockedRecipes: any[], pantryItems: any[]): string {
   return `Tu es un assistant de planification de repas. Génère un menu pour une semaine.
 
 Contraintes :
@@ -100,6 +105,11 @@ Contraintes :
 
 Priorise les ingrédients en aubaine cette semaine quand c'est cohérent avec le régime :
 ${JSON.stringify(deals)}
+
+Voici ce que l'utilisateur a déjà dans son garde-manger/frigo — priorise aussi des
+recettes qui utilisent ces ingrédients pour éviter le gaspillage et réduire les
+achats nécessaires (sans t'y limiter si ça nuit à la variété ou au régime) :
+${JSON.stringify(pantryItems)}
 
 Réponds uniquement avec un objet JSON de la forme :
 {"meals": [{"day_index": 0-6, "meal_type": "breakfast"|"lunch"|"dinner", "title": string, "ingredients": [{"name": string, "quantity": number, "unit": string}], "steps": string, "prep_time_minutes": number, "diet_tags": string[]}]}`;

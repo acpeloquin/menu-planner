@@ -6,6 +6,15 @@ export type MealType = 'breakfast' | 'lunch' | 'dinner';
 export type MealPlanStatus = 'draft' | 'generating' | 'ready';
 export type RecipeSource = 'ai_generated' | 'manual';
 
+export interface PantryItem {
+  id: string;
+  user_id: string;
+  ingredient_name: string;
+  quantity: number | null;
+  unit: string | null;
+  created_at: string;
+}
+
 export interface Store {
   id: string;
   name: string;

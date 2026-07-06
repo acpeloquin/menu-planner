@@ -71,11 +71,18 @@ Deno.serve(async (req) => {
       .maybeSingle();
     const defaultStoreId: string | null = defaultUserStore?.store_id ?? null;
 
-    const prompt = buildAggregationPrompt(allIngredients, deals);
+    const { data: pantryItems } = await supabase
+      .from('pantry_items')
+      .select('ingredient_name, quantity, unit')
+      .eq('user_id', mealPlan.user_id);
+
+    const prompt = buildAggregationPrompt(allIngredients, deals, pantryItems ?? []);
     const raw = await callClaude(prompt, { maxTokens: 8192 });
     const parsed = JSON.parse(extractJson(raw)) as { items: AggregatedItem[] };
 
-    const itemRows = parsed.items.map((item) => {
+    const itemRows = parsed.items
+      .filter((item) => item.total_quantity > 0)
+      .map((item) => {
       const deal =
         item.matched_deal_index !== null && item.matched_deal_index !== undefined
           ? deals[item.matched_deal_index]
@@ -132,7 +139,7 @@ Deno.serve(async (req) => {
 });
 
 // deno-lint-ignore no-explicit-any
-function buildAggregationPrompt(ingredients: RecipeIngredient[], deals: any[]): string {
+function buildAggregationPrompt(ingredients: RecipeIngredient[], deals: any[], pantryItems: any[]): string {
   const dealsForPrompt = deals.map((d, i) => ({
     index: i,
     product_name: d.product_name,
@@ -146,13 +153,22 @@ ${JSON.stringify(ingredients)}
 Voici les aubaines actives cette semaine, chacune avec un index :
 ${JSON.stringify(dealsForPrompt)}
 
+Voici ce que l'utilisateur a déjà en stock dans son garde-manger/frigo :
+${JSON.stringify(pantryItems)}
+
 Tâche : agrège les ingrédients identiques ou équivalents (ex: "Ail" et "Ail (gousses)" sont le
 même ingrédient), additionne leurs quantités quand les unités sont compatibles (sinon garde
 l'entrée la plus fréquente et ajuste raisonnablement), normalise le nom (singulier, capitalisation
 propre), et assigne une catégorie parmi : fruits_legumes, proteines, produits_laitiers,
 boulangerie, epicerie, autre.
 
-Pour chaque ingrédient agrégé, si son nom correspond clairement à une aubaine de la liste
+Ensuite, soustrais ce que l'utilisateur a déjà en stock de la quantité requise pour chaque
+ingrédient (match par nom équivalent, pas seulement exact). Si le stock déclaré n'a pas de
+quantité précisée (juste "j'en ai"), considère que ça couvre entièrement le besoin pour cet
+ingrédient. Si après soustraction la quantité restante est de 0 ou moins, exclus complètement
+cet ingrédient du résultat plutôt que de l'inclure avec une quantité nulle ou négative.
+
+Pour chaque ingrédient agrégé restant, si son nom correspond clairement à une aubaine de la liste
 ci-dessus (même produit), indique son index dans "matched_deal_index". Sinon, mets null.
 
 Réponds uniquement avec un objet JSON de la forme :

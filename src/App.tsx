@@ -6,6 +6,7 @@ import Deals from '@/pages/Deals';
 import Stores from '@/pages/Stores';
 import MealPlanPage from '@/pages/MealPlan';
 import GroceryListPage from '@/pages/GroceryList';
+import PantryPage from '@/pages/Pantry';
 
 function ProtectedRoutes() {
   const { user, loading } = useAuth();
@@ -24,6 +25,7 @@ function ProtectedRoutes() {
         <Route index element={<Deals />} />
         <Route path="menu" element={<MealPlanPage />} />
         <Route path="epicerie" element={<GroceryListPage />} />
+        <Route path="garde-manger" element={<PantryPage />} />
         <Route path="stores" element={<Stores />} />
       </Route>
     </Routes>

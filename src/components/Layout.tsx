@@ -7,6 +7,7 @@ const navItems = [
   { to: '/', label: 'Aubaines' },
   { to: '/menu', label: 'Menu' },
   { to: '/epicerie', label: 'Épicerie' },
+  { to: '/garde-manger', label: 'Garde-manger' },
   { to: '/stores', label: 'Magasins' },
 ];
 
