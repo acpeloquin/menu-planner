@@ -15,6 +15,13 @@ export interface Store {
   created_at: string;
 }
 
+export interface UserStore {
+  user_id: string;
+  store_id: string;
+  is_default: boolean;
+  created_at: string;
+}
+
 export interface Deal {
   id: string;
   store_id: string;

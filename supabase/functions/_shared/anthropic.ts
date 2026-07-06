@@ -35,5 +35,9 @@ export async function callClaude(prompt: string, options: CallClaudeOptions = {}
   }
 
   const data = await response.json();
-  return data.content?.[0]?.text ?? '';
+  // claude-sonnet-5 can emit a leading "thinking" content block before the
+  // actual text block, so pick the first block of type "text" rather than
+  // assuming index 0.
+  const textBlock = data.content?.find((block: { type: string; text?: string }) => block.type === 'text');
+  return textBlock?.text ?? '';
 }

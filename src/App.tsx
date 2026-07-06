@@ -1,12 +1,40 @@
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from '@/hooks/useAuth';
+import Layout from '@/components/Layout';
+import Login from '@/pages/Login';
+import Deals from '@/pages/Deals';
+import Stores from '@/pages/Stores';
+
+function ProtectedRoutes() {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return <div className="flex min-h-screen items-center justify-center">Chargement…</div>;
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return (
+    <Routes>
+      <Route element={<Layout />}>
+        <Route index element={<Deals />} />
+        <Route path="stores" element={<Stores />} />
+      </Route>
+    </Routes>
+  );
+}
+
 export default function App() {
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <div className="text-center space-y-2">
-        <h1 className="text-2xl font-semibold">Menu Planner</h1>
-        <p className="text-muted-foreground">
-          Planification de menus et liste d&apos;épicerie basée sur les aubaines.
-        </p>
-      </div>
-    </div>
+    <BrowserRouter>
+      <AuthProvider>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/*" element={<ProtectedRoutes />} />
+        </Routes>
+      </AuthProvider>
+    </BrowserRouter>
   );
 }
