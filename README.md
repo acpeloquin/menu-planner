@@ -40,11 +40,22 @@ npx supabase functions deploy scrape-marche-dessaulles --no-verify-jwt
 
 ### 3. Cron du scraper Dessaulles
 
-Planifier `scrape-marche-dessaulles` 1x/jour via `pg_cron` (Supabase Dashboard >
-Database > Cron Jobs) ou un Netlify Scheduled Function qui l'appelle par HTTP.
-Le site Dessaulles utilise un cache WP Rocket : le contenu peut prendre 1-2
-jours à se mettre à jour après un changement de circulaire, donc un scrape
-quotidien est largement suffisant.
+`supabase/migrations/0002_schedule_scraper_cron.sql` active `pg_cron`/`pg_net`
+et planifie `scrape-marche-dessaulles` à 10h00 UTC (6h HAE) chaque jour via
+`net.http_post`. Le site Dessaulles utilise un cache WP Rocket : le contenu
+peut prendre 1-2 jours à se mettre à jour après un changement de circulaire,
+donc un scrape quotidien est largement suffisant.
+
+La clé service_role utilisée par le cron job est lue depuis Supabase Vault,
+jamais commitée en clair. Étape manuelle unique par projet (avant de pousser
+la migration 0002) :
+
+```sql
+select vault.create_secret('<service_role_key>', 'service_role_key');
+```
+
+À exécuter une fois via le SQL Editor du Dashboard Supabase (ou l'API Management
+`POST /v1/projects/{ref}/database/query`).
 
 ### 4. Déploiement Netlify
 
