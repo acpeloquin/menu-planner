@@ -1,10 +1,21 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { addPantryItem, listPantryItems, removePantryItem } from '@/lib/api/pantry';
+import {
+  addPantryItem,
+  analyzePantryPhoto,
+  listPantryItems,
+  removePantryItem,
+  type ParsedPantryItem,
+} from '@/lib/api/pantry';
+import { resizeImageToBase64 } from '@/lib/image';
 import type { PantryItem } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+
+interface DraftPantryItem extends ParsedPantryItem {
+  tempId: string;
+}
 
 export default function PantryPage() {
   const { user } = useAuth();
@@ -14,6 +25,11 @@ export default function PantryPage() {
   const [unit, setUnit] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [analyzing, setAnalyzing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [drafts, setDrafts] = useState<DraftPantryItem[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -56,6 +72,49 @@ export default function PantryPage() {
     }
   }
 
+  async function handlePhotoSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAnalyzing(true);
+    setError(null);
+    setDrafts([]);
+    try {
+      const { base64, mediaType } = await resizeImageToBase64(file);
+      const parsed = await analyzePantryPhoto(base64, mediaType);
+      setDrafts(parsed.map((item, i) => ({ ...item, tempId: `${Date.now()}-${i}` })));
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setAnalyzing(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
+
+  function updateDraft(tempId: string, patch: Partial<DraftPantryItem>) {
+    setDrafts((current) => current.map((d) => (d.tempId === tempId ? { ...d, ...patch } : d)));
+  }
+
+  function removeDraft(tempId: string) {
+    setDrafts((current) => current.filter((d) => d.tempId !== tempId));
+  }
+
+  async function handleSaveDrafts() {
+    if (!user || drafts.length === 0) return;
+    setSaving(true);
+    setError(null);
+    try {
+      for (const draft of drafts) {
+        await addPantryItem(user.id, draft.ingredient_name, draft.quantity, draft.unit);
+      }
+      setDrafts([]);
+      await refresh();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   if (loading) return <p className="text-muted-foreground">Chargement…</p>;
 
   return (
@@ -71,7 +130,70 @@ export default function PantryPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Ajouter un item</CardTitle>
+          <CardTitle className="text-base">Analyser une photo</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Prends une photo de ton garde-manger ou de ton frigo — l'IA identifie les aliments visibles.
+          </p>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={handlePhotoSelected}
+            disabled={analyzing}
+            className="text-sm"
+          />
+          {analyzing && <p className="text-sm text-muted-foreground">Analyse en cours…</p>}
+        </CardContent>
+      </Card>
+
+      {drafts.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Items détectés ({drafts.length})</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {drafts.map((draft) => (
+              <div key={draft.tempId} className="flex flex-wrap items-center gap-2">
+                <Input
+                  value={draft.ingredient_name}
+                  onChange={(e) => updateDraft(draft.tempId, { ingredient_name: e.target.value })}
+                  className="flex-1 min-w-[160px]"
+                />
+                <Input
+                  type="number"
+                  placeholder="Quantité"
+                  value={draft.quantity ?? ''}
+                  onChange={(e) =>
+                    updateDraft(draft.tempId, {
+                      quantity: e.target.value ? Number(e.target.value) : null,
+                    })
+                  }
+                  className="w-28"
+                />
+                <Input
+                  placeholder="Unité"
+                  value={draft.unit ?? ''}
+                  onChange={(e) => updateDraft(draft.tempId, { unit: e.target.value || null })}
+                  className="w-24"
+                />
+                <Button variant="ghost" size="sm" onClick={() => removeDraft(draft.tempId)}>
+                  Retirer
+                </Button>
+              </div>
+            ))}
+            <Button onClick={handleSaveDrafts} disabled={saving}>
+              {saving ? 'Ajout…' : `Ajouter ${drafts.length} item(s) au garde-manger`}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Ajouter un item manuellement</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleAdd} className="flex flex-wrap gap-2">

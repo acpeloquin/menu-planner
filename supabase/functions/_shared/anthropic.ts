@@ -4,6 +4,10 @@ const DEFAULT_MODEL = 'claude-sonnet-5';
 interface CallClaudeOptions {
   system?: string;
   maxTokens?: number;
+  image?: {
+    base64: string;
+    mediaType: string;
+  };
 }
 
 // Appel direct à l'API Messages d'Anthropic depuis l'edge function.
@@ -13,6 +17,15 @@ export async function callClaude(prompt: string, options: CallClaudeOptions = {}
   if (!apiKey) {
     throw new Error('Missing ANTHROPIC_API_KEY');
   }
+
+  const content: unknown[] = [];
+  if (options.image) {
+    content.push({
+      type: 'image',
+      source: { type: 'base64', media_type: options.image.mediaType, data: options.image.base64 },
+    });
+  }
+  content.push({ type: 'text', text: prompt });
 
   const response = await fetch(ANTHROPIC_API_URL, {
     method: 'POST',
@@ -25,7 +38,7 @@ export async function callClaude(prompt: string, options: CallClaudeOptions = {}
       model: DEFAULT_MODEL,
       max_tokens: options.maxTokens ?? 4096,
       system: options.system,
-      messages: [{ role: 'user', content: prompt }],
+      messages: [{ role: 'user', content }],
     }),
   });
 

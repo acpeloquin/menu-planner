@@ -23,5 +23,8 @@ verify_jwt = true
 [functions.generate-grocery-list]
 verify_jwt = true
 
+[functions.analyze-pantry-photo]
+verify_jwt = true
+
 [functions.scrape-marche-dessaulles]
 verify_jwt = false
