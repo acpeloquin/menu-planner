@@ -77,8 +77,15 @@ Deno.serve(async (req) => {
       .eq('user_id', mealPlan.user_id);
 
     const prompt = buildAggregationPrompt(allIngredients, deals, pantryItems ?? []);
-    const raw = await callClaude(prompt, { maxTokens: 8192 });
-    const parsed = JSON.parse(extractJson(raw)) as { items: AggregatedItem[] };
+    const raw = await callClaude(prompt, { maxTokens: 16000, thinking: { type: 'disabled' } });
+    let parsed: { items: AggregatedItem[] };
+    try {
+      parsed = JSON.parse(extractJson(raw)) as { items: AggregatedItem[] };
+    } catch (_parseError) {
+      throw new Error(
+        `Réponse de Claude incomplète ou invalide (probablement tronquée) : ${raw.slice(0, 200)}...`,
+      );
+    }
 
     const itemRows = parsed.items
       .filter((item) => item.total_quantity > 0)

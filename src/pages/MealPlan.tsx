@@ -148,8 +148,8 @@ export default function MealPlanPage() {
   const dayIndexes = [...byDay.keys()].sort((a, b) => a - b);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 print:space-y-4">
+      <div className="flex items-center justify-between print:hidden">
         <div>
           <h1 className="text-xl font-semibold">Menu de la semaine</h1>
           <p className="text-sm text-muted-foreground">
@@ -163,7 +163,7 @@ export default function MealPlanPage() {
         )}
       </div>
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && <p className="text-sm text-destructive print:hidden">{error}</p>}
 
       {showForm && (
         <Card>
@@ -253,10 +253,17 @@ export default function MealPlanPage() {
 
       {mealPlan && !showForm && (
         <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            Semaine du {new Date(`${mealPlan.week_start_date}T00:00:00`).toLocaleDateString('fr-CA')} ·{' '}
-            {mealPlan.servings} portion(s) · statut : {mealPlan.status}
-          </p>
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">
+              Semaine du {new Date(`${mealPlan.week_start_date}T00:00:00`).toLocaleDateString('fr-CA')} ·{' '}
+              {mealPlan.servings} portion(s) · statut : {mealPlan.status}
+            </p>
+            {recipes.length > 0 && (
+              <Button variant="outline" size="sm" className="print:hidden" onClick={() => window.print()}>
+                Imprimer / Exporter en PDF
+              </Button>
+            )}
+          </div>
 
           {dayIndexes.map((dayIndex) => (
             <div key={dayIndex} className="space-y-2">
@@ -269,7 +276,7 @@ export default function MealPlanPage() {
                 const mpr = byDay.get(dayIndex)!.find((m) => m.meal_type === mealType)!;
                 const key = `${dayIndex}-${mealType}`;
                 return (
-                  <Card key={key}>
+                  <Card key={key} className="print:break-inside-avoid">
                     <CardContent className="pt-4 space-y-2">
                       <div className="flex flex-col gap-2">
                         <div>
@@ -293,7 +300,7 @@ export default function MealPlanPage() {
                             </a>
                           )}
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 print:hidden">
                           <Button
                             size="sm"
                             variant={mpr.is_locked ? 'secondary' : 'outline'}

@@ -32,7 +32,7 @@ Texte à parser :
 ${text}
 """`;
 
-    const raw = await callClaude(prompt, { maxTokens: 4096 });
+    const raw = await callClaude(prompt, { maxTokens: 4096, thinking: { type: 'disabled' } });
     const deals = JSON.parse(extractJson(raw));
 
     return new Response(JSON.stringify({ deals }), {

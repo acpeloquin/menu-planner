@@ -141,6 +141,7 @@ ou {"source_url": null} si rien d'adéquat n'est trouvé :
       steps: found.steps,
       prep_time_minutes: found.prep_time_minutes,
       diet_tags: found.diet_tags ?? null,
+      source: 'web_search',
       source_url: found.source_url,
     })
     .eq('id', recipeId);

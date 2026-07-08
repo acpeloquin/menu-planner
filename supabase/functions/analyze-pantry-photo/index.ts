@@ -34,6 +34,7 @@ Réponds uniquement avec un objet JSON de la forme :
     const raw = await callClaude(prompt, {
       image: { base64: imageBase64, mediaType },
       maxTokens: 4096,
+      thinking: { type: 'disabled' },
     });
     const parsed = JSON.parse(extractJson(raw));
 

@@ -4,7 +4,7 @@
 export type DealSource = 'manual' | 'scraping';
 export type MealType = 'breakfast' | 'lunch' | 'dinner';
 export type MealPlanStatus = 'draft' | 'generating' | 'ready';
-export type RecipeSource = 'ai_generated' | 'manual';
+export type RecipeSource = 'ai_generated' | 'web_search' | 'manual';
 
 export interface PantryItem {
   id: string;

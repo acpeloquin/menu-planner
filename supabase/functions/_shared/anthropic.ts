@@ -10,6 +10,12 @@ interface CallClaudeOptions {
   };
   // deno-lint-ignore no-explicit-any
   tools?: any[];
+  // Pour les tâches d'extraction/agrégation simples sans recherche web, passer
+  // { type: 'disabled' } : sans ça, claude-sonnet-5 réfléchit par défaut, et
+  // sur un gros volume de données (ex: agrégation de beaucoup d'ingrédients)
+  // ça peut consommer tout le budget de max_tokens en réflexion sans jamais
+  // produire de texte final (réponse vide, JSON.parse échoue).
+  thinking?: { type: 'disabled' | 'adaptive' };
 }
 
 // Appel direct à l'API Messages d'Anthropic depuis l'edge function.
@@ -41,6 +47,7 @@ export async function callClaude(prompt: string, options: CallClaudeOptions = {}
       max_tokens: options.maxTokens ?? 4096,
       system: options.system,
       tools: options.tools,
+      thinking: options.thinking,
       messages: [{ role: 'user', content }],
     }),
   });

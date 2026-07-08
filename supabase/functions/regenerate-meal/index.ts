@@ -80,7 +80,7 @@ Réponds uniquement avec un objet JSON (aucun texte avant ou après):
         steps: item.steps,
         prep_time_minutes: item.prep_time_minutes,
         diet_tags: item.diet_tags ?? null,
-        source: 'ai_generated',
+        source: item.source_url ? 'web_search' : 'ai_generated',
         source_url: item.source_url ?? null,
       })
       .select('id')
