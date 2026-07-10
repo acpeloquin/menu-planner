@@ -2,6 +2,7 @@ import { corsHeaders } from '../_shared/cors.ts';
 import { createAdminClient } from '../_shared/supabase-admin.ts';
 import { callClaude } from '../_shared/anthropic.ts';
 import { RECIPE_SEARCH_TOOLS_LIGHT, RECIPE_SITES_DESCRIPTION } from '../_shared/recipe-search.ts';
+import { fetchFavoriteRecipes, formatFavoritesForPrompt, type FavoriteForPrompt } from '../_shared/favorites.ts';
 
 interface GenerateMenuRequest {
   mealPlanId: string;
@@ -55,31 +56,48 @@ Deno.serve(async (req) => {
       .select('ingredient_name, quantity, unit')
       .eq('user_id', mealPlan.user_id);
 
-    const prompt = buildMenuPrompt(mealPlan, activeDeals ?? [], lockedRecipes ?? [], pantryItems ?? []);
+    const favorites = await fetchFavoriteRecipes(supabase, mealPlan.user_id);
+
+    const prompt = buildMenuPrompt(mealPlan, activeDeals ?? [], lockedRecipes ?? [], pantryItems ?? [], favorites);
     const raw = await callClaude(prompt, { maxTokens: 16000 });
     const generated = JSON.parse(extractJson(raw));
 
-    let firstRecipeId: string | null = null;
+    // Le premier repas composé (pas réutilisé d'un favori) sert de candidat pour
+    // l'ancrage best-effort dans une vraie recette via recherche web plus bas —
+    // une recette favorite est déjà "connue", elle n'a pas besoin d'être ancrée.
+    let groundingCandidate: { recipeId: string; meal: unknown } | null = null;
+
     for (const item of generated.meals) {
-      const { data: recipe, error: recipeError } = await supabase
-        .from('recipes')
-        .insert({
-          title: item.title,
-          ingredients: item.ingredients,
-          steps: item.steps,
-          prep_time_minutes: item.prep_time_minutes,
-          diet_tags: item.diet_tags ?? null,
-          source: 'ai_generated',
-        })
-        .select('id')
-        .single();
-      if (recipeError || !recipe) throw recipeError ?? new Error('Échec de création de la recette');
-      firstRecipeId ??= recipe.id;
+      let recipeId: string;
+
+      const favoriteIndex = item.favorite_index;
+      const favorite: FavoriteForPrompt | undefined =
+        typeof favoriteIndex === 'number' ? favorites[favoriteIndex] : undefined;
+
+      if (favorite) {
+        recipeId = favorite.recipe_id;
+      } else {
+        const { data: recipe, error: recipeError } = await supabase
+          .from('recipes')
+          .insert({
+            title: item.title,
+            ingredients: item.ingredients,
+            steps: item.steps,
+            prep_time_minutes: item.prep_time_minutes,
+            diet_tags: item.diet_tags ?? null,
+            source: 'ai_generated',
+          })
+          .select('id')
+          .single();
+        if (recipeError || !recipe) throw recipeError ?? new Error('Échec de création de la recette');
+        recipeId = recipe.id;
+        groundingCandidate ??= { recipeId, meal: item };
+      }
 
       await supabase.from('meal_plan_recipes').upsert(
         {
           meal_plan_id: mealPlanId,
-          recipe_id: recipe.id,
+          recipe_id: recipeId,
           day_index: item.day_index,
           meal_type: item.meal_type,
           is_locked: false,
@@ -90,9 +108,9 @@ Deno.serve(async (req) => {
 
     // Meilleur effort : ancre UN repas dans une vraie recette trouvée par recherche
     // web. Ne doit jamais faire échouer la génération du menu si ça timeout/échoue.
-    if (firstRecipeId && generated.meals.length > 0) {
+    if (groundingCandidate) {
       try {
-        await groundOneRecipeInRealSource(supabase, firstRecipeId, generated.meals[0], mealPlan);
+        await groundOneRecipeInRealSource(supabase, groundingCandidate.recipeId, groundingCandidate.meal, mealPlan);
       } catch (_err) {
         // best-effort : on garde la recette composée par l'IA pour ce repas
       }
@@ -148,7 +166,17 @@ ou {"source_url": null} si rien d'adéquat n'est trouvé :
 }
 
 // deno-lint-ignore no-explicit-any
-function buildMenuPrompt(mealPlan: any, deals: any[], lockedRecipes: any[], pantryItems: any[]): string {
+function buildMenuPrompt(
+  // deno-lint-ignore no-explicit-any
+  mealPlan: any,
+  // deno-lint-ignore no-explicit-any
+  deals: any[],
+  // deno-lint-ignore no-explicit-any
+  lockedRecipes: any[],
+  // deno-lint-ignore no-explicit-any
+  pantryItems: any[],
+  favorites: FavoriteForPrompt[],
+): string {
   return `Tu es un assistant de planification de repas. Génère un menu pour une semaine.
 
 Contraintes :
@@ -168,8 +196,18 @@ recettes qui utilisent ces ingrédients pour éviter le gaspillage et réduire l
 achats nécessaires (sans t'y limiter si ça nuit à la variété ou au régime) :
 ${JSON.stringify(pantryItems)}
 
+Voici la banque de recettes favorites de l'utilisateur (recettes déjà aimées les semaines
+précédentes). Pour chaque repas, tu PEUX réutiliser une recette favorite telle quelle si ses
+ingrédients correspondent bien aux aubaines et/ou au garde-manger ci-dessus et qu'elle convient
+au régime et aux préférences — indique alors son index dans "favorite_index" pour ce repas (les
+champs title/ingredients/steps/prep_time_minutes/diet_tags sont alors ignorés, laisse-les vides).
+Ne réutilise pas la même recette favorite plus d'une fois dans la même semaine. Si aucune ne
+convient pour un repas donné, laisse "favorite_index": null et compose une nouvelle recette
+normalement :
+${formatFavoritesForPrompt(favorites)}
+
 Réponds uniquement avec un objet JSON de la forme :
-{"meals": [{"day_index": 0-6, "meal_type": "breakfast"|"lunch"|"dinner", "title": string, "ingredients": [{"name": string, "quantity": number, "unit": string}], "steps": string, "prep_time_minutes": number, "diet_tags": string[]}]}`;
+{"meals": [{"day_index": 0-6, "meal_type": "breakfast"|"lunch"|"dinner", "favorite_index": number|null, "title": string, "ingredients": [{"name": string, "quantity": number, "unit": string}], "steps": string, "prep_time_minutes": number, "diet_tags": string[]}]}`;
 }
 
 function extractJson(text: string): string {

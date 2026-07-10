@@ -8,6 +8,7 @@ const navItems = [
   { to: '/menu', label: 'Menu' },
   { to: '/epicerie', label: 'Épicerie' },
   { to: '/garde-manger', label: 'Garde-manger' },
+  { to: '/favoris', label: 'Favoris' },
   { to: '/stores', label: 'Magasins' },
 ];
 

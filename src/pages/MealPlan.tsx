@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { Star } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { listDiets } from '@/lib/api/diets';
 import {
@@ -11,6 +12,7 @@ import {
   setMealLocked,
   type MealPlanRecipeWithRecipe,
 } from '@/lib/api/mealPlans';
+import { addFavorite, listFavoriteRecipeIds, removeFavorite } from '@/lib/api/favorites';
 import type { Diet, MealPlan, MealType } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,6 +21,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 const MEAL_TYPE_LABELS: Record<MealType, string> = {
   breakfast: 'Déjeuner',
@@ -53,6 +56,7 @@ export default function MealPlanPage() {
   const [regeneratingKey, setRegeneratingKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
 
   const [weekStartDate, setWeekStartDate] = useState(mondayOfThisWeek());
   const [dietId, setDietId] = useState('');
@@ -80,7 +84,24 @@ export default function MealPlanPage() {
     } else {
       setShowForm(true);
     }
+    const favIds = await listFavoriteRecipeIds(user.id);
+    setFavoriteIds(favIds);
     setLoading(false);
+  }
+
+  async function handleToggleFavorite(recipeId: string) {
+    if (!user) return;
+    try {
+      if (favoriteIds.has(recipeId)) {
+        await removeFavorite(user.id, recipeId);
+      } else {
+        await addFavorite(user.id, recipeId);
+      }
+      const favIds = await listFavoriteRecipeIds(user.id);
+      setFavoriteIds(favIds);
+    } catch (err) {
+      setError((err as Error).message);
+    }
   }
 
   async function handleCreate(e: FormEvent) {
@@ -280,9 +301,30 @@ export default function MealPlanPage() {
                     <CardContent className="pt-4 space-y-2">
                       <div className="flex flex-col gap-2">
                         <div>
-                          <Badge variant="secondary" className="mb-1">
-                            {MEAL_TYPE_LABELS[mealType]}
-                          </Badge>
+                          <div className="flex items-start justify-between gap-2">
+                            <Badge variant="secondary" className="mb-1">
+                              {MEAL_TYPE_LABELS[mealType]}
+                            </Badge>
+                            <button
+                              type="button"
+                              className="print:hidden shrink-0"
+                              title={
+                                favoriteIds.has(mpr.recipe_id)
+                                  ? 'Retirer des favoris'
+                                  : 'Ajouter aux favoris'
+                              }
+                              onClick={() => handleToggleFavorite(mpr.recipe_id)}
+                            >
+                              <Star
+                                className={cn(
+                                  'h-4 w-4',
+                                  favoriteIds.has(mpr.recipe_id)
+                                    ? 'fill-yellow-400 text-yellow-500'
+                                    : 'text-muted-foreground',
+                                )}
+                              />
+                            </button>
+                          </div>
                           <p className="font-medium">{mpr.recipes.title}</p>
                           {mpr.recipes.prep_time_minutes && (
                             <p className="text-xs text-muted-foreground">

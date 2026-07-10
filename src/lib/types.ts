@@ -95,6 +95,12 @@ export interface Recipe {
   created_at: string;
 }
 
+export interface FavoriteRecipe {
+  user_id: string;
+  recipe_id: string;
+  created_at: string;
+}
+
 export interface MealPlanRecipe {
   id: string;
   meal_plan_id: string;
