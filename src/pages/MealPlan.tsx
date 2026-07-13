@@ -14,6 +14,7 @@ import {
 } from '@/lib/api/mealPlans';
 import { addFavorite, listFavoriteRecipeIds, removeFavorite } from '@/lib/api/favorites';
 import type { Diet, MealPlan, MealType } from '@/lib/types';
+import { recipeMetaLine } from '@/lib/recipeFormat';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -21,6 +22,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Slider } from '@/components/ui/slider';
 import { cn } from '@/lib/utils';
 
 const MEAL_TYPE_LABELS: Record<MealType, string> = {
@@ -65,6 +67,7 @@ export default function MealPlanPage() {
   const [numLunches, setNumLunches] = useState(3);
   const [numDinners, setNumDinners] = useState(5);
   const [preferences, setPreferences] = useState('');
+  const [budgetPerPortionCents, setBudgetPerPortionCents] = useState(700);
 
   useEffect(() => {
     if (!user) return;
@@ -119,6 +122,7 @@ export default function MealPlanPage() {
         numLunches,
         numDinners,
         preferences: preferences || null,
+        budgetPerPortionCents,
       });
       setMealPlan(plan);
       setRecipes([]);
@@ -264,6 +268,21 @@ export default function MealPlanPage() {
                   placeholder="Ex: pas d'arachides, max 30 minutes de préparation"
                 />
               </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Budget max par portion</Label>
+                  <span className="text-sm text-muted-foreground">
+                    {(budgetPerPortionCents / 100).toFixed(2)} $
+                  </span>
+                </div>
+                <Slider
+                  min={0}
+                  max={2500}
+                  step={25}
+                  value={[budgetPerPortionCents]}
+                  onValueChange={([value]) => setBudgetPerPortionCents(value)}
+                />
+              </div>
               <Button type="submit" disabled={generating}>
                 {generating ? 'Génération en cours… (peut prendre une minute)' : 'Générer le menu'}
               </Button>
@@ -277,7 +296,8 @@ export default function MealPlanPage() {
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
               Semaine du {new Date(`${mealPlan.week_start_date}T00:00:00`).toLocaleDateString('fr-CA')} ·{' '}
-              {mealPlan.servings} portion(s) · statut : {mealPlan.status}
+              {mealPlan.servings} portion(s) · budget max {(mealPlan.budget_per_portion_cents / 100).toFixed(2)} $/portion
+              · statut : {mealPlan.status}
             </p>
             {recipes.length > 0 && (
               <Button variant="outline" size="sm" className="print:hidden" onClick={() => window.print()}>
@@ -326,10 +346,8 @@ export default function MealPlanPage() {
                             </button>
                           </div>
                           <p className="font-medium">{mpr.recipes.title}</p>
-                          {mpr.recipes.prep_time_minutes && (
-                            <p className="text-xs text-muted-foreground">
-                              ~{mpr.recipes.prep_time_minutes} min
-                            </p>
+                          {recipeMetaLine(mpr.recipes) && (
+                            <p className="text-xs text-muted-foreground">{recipeMetaLine(mpr.recipes)}</p>
                           )}
                           {mpr.recipes.source_url && (
                             <a

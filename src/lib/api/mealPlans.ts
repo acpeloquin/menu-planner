@@ -14,6 +14,7 @@ export interface CreateMealPlanInput {
   numLunches: number;
   numDinners: number;
   preferences: string | null;
+  budgetPerPortionCents: number;
 }
 
 export async function createMealPlan(input: CreateMealPlanInput): Promise<MealPlan> {
@@ -28,6 +29,7 @@ export async function createMealPlan(input: CreateMealPlanInput): Promise<MealPl
       num_lunches: input.numLunches,
       num_dinners: input.numDinners,
       preferences: input.preferences,
+      budget_per_portion_cents: input.budgetPerPortionCents,
       status: 'draft',
     })
     .select()

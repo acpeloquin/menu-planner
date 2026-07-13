@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { listFavoriteRecipes, removeFavorite, type FavoriteRecipeWithRecipe } from '@/lib/api/favorites';
+import { recipeMetaLine } from '@/lib/recipeFormat';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -67,8 +68,8 @@ export default function FavoritesPage() {
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <p className="font-medium">{recipes.title}</p>
-                  {recipes.prep_time_minutes && (
-                    <p className="text-xs text-muted-foreground">~{recipes.prep_time_minutes} min</p>
+                  {recipeMetaLine(recipes) && (
+                    <p className="text-xs text-muted-foreground">{recipeMetaLine(recipes)}</p>
                   )}
                   {recipes.diet_tags && recipes.diet_tags.length > 0 && (
                     <div className="mt-1 flex flex-wrap gap-1">

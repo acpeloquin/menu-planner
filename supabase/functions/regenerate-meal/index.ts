@@ -61,6 +61,8 @@ Deno.serve(async (req) => {
     const prompt = `Fais UNE recherche web (un seul appel, pas plus) pour trouver une vraie recette de type
 "${mealType}" pour ${mealPlan.servings} portions, régime "${mealPlan.diets?.name ?? 'omnivore'}",
 préférences: ${mealPlan.preferences ?? 'aucune'}, sur l'un de ces sites : ${RECIPE_SITES_DESCRIPTION}.
+Budget maximum par portion : ${(mealPlan.budget_per_portion_cents / 100).toFixed(2)} $ — le coût estimé
+des ingrédients par portion doit rester sous cette limite.
 Priorise ces aubaines si pertinent: ${JSON.stringify(activeDeals ?? [])}.
 Voici ce que l'utilisateur a déjà dans son garde-manger/frigo — priorise cette recette pour utiliser ces
 ingrédients si c'est cohérent avec le type de repas et le régime: ${JSON.stringify(pantryItems ?? [])}.
@@ -76,10 +78,11 @@ rapidité : si le résumé retourné par la recherche donne déjà assez de dét
 étapes), n'ouvre PAS la page complète — construis la recette directement à partir de ce résumé.
 N'utilise l'outil de récupération de page qu'en dernier recours si le résumé est vraiment
 insuffisant. Si la recherche ne donne rien d'adéquat, compose une recette toi-même sans chercher
-davantage (laisse alors "source_url" à null).
+davantage (laisse alors "source_url" à null). Estime aussi les calories par portion et le coût
+des ingrédients par portion en cents canadiens (cohérent avec le budget max ci-dessus).
 Réponds uniquement avec un objet JSON (aucun texte avant ou après), soit la forme favori ci-dessus,
 soit :
-{"favorite_index": null, "title": string, "ingredients": [{"name": string, "quantity": number, "unit": string}], "steps": string, "prep_time_minutes": number, "diet_tags": string[], "source_url": string|null}`;
+{"favorite_index": null, "title": string, "ingredients": [{"name": string, "quantity": number, "unit": string}], "steps": string, "prep_time_minutes": number, "calories_per_serving": number, "estimated_cost_per_serving_cents": number, "diet_tags": string[], "source_url": string|null}`;
 
     const raw = await callClaude(prompt, { maxTokens: 4096, tools: RECIPE_SEARCH_TOOLS_LIGHT });
     const item = JSON.parse(extractJson(raw));
@@ -97,6 +100,8 @@ soit :
           ingredients: item.ingredients,
           steps: item.steps,
           prep_time_minutes: item.prep_time_minutes,
+          calories_per_serving: item.calories_per_serving ?? null,
+          estimated_cost_per_serving_cents: item.estimated_cost_per_serving_cents ?? null,
           diet_tags: item.diet_tags ?? null,
           source: item.source_url ? 'web_search' : 'ai_generated',
           source_url: item.source_url ?? null,

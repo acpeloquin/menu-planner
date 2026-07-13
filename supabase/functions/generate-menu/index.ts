@@ -84,6 +84,8 @@ Deno.serve(async (req) => {
             ingredients: item.ingredients,
             steps: item.steps,
             prep_time_minutes: item.prep_time_minutes,
+            calories_per_serving: item.calories_per_serving ?? null,
+            estimated_cost_per_serving_cents: item.estimated_cost_per_serving_cents ?? null,
             diet_tags: item.diet_tags ?? null,
             source: 'ai_generated',
           })
@@ -143,9 +145,10 @@ async function groundOneRecipeInRealSource(
 "${meal.meal_type}" similaire à "${meal.title}", pour ${mealPlan.servings} portions, régime
 "${mealPlan.diets?.name ?? 'omnivore'}", sur l'un de ces sites : ${RECIPE_SITES_DESCRIPTION}.
 Si le résumé de recherche donne assez de détails, construis la recette à partir de ce résumé
-sans ouvrir la page complète. Réponds uniquement avec un objet JSON (aucun texte avant/après),
+sans ouvrir la page complète. Estime aussi les calories par portion et le coût des ingrédients
+par portion (en dollars canadiens). Réponds uniquement avec un objet JSON (aucun texte avant/après),
 ou {"source_url": null} si rien d'adéquat n'est trouvé :
-{"title": string, "ingredients": [{"name": string, "quantity": number, "unit": string}], "steps": string, "prep_time_minutes": number, "diet_tags": string[], "source_url": string|null}`;
+{"title": string, "ingredients": [{"name": string, "quantity": number, "unit": string}], "steps": string, "prep_time_minutes": number, "calories_per_serving": number, "estimated_cost_per_serving_cents": number, "diet_tags": string[], "source_url": string|null}`;
 
   const raw = await callClaude(prompt, { maxTokens: 4096, tools: RECIPE_SEARCH_TOOLS_LIGHT });
   const found = JSON.parse(extractJson(raw));
@@ -158,6 +161,8 @@ ou {"source_url": null} si rien d'adéquat n'est trouvé :
       ingredients: found.ingredients,
       steps: found.steps,
       prep_time_minutes: found.prep_time_minutes,
+      calories_per_serving: found.calories_per_serving ?? null,
+      estimated_cost_per_serving_cents: found.estimated_cost_per_serving_cents ?? null,
       diet_tags: found.diet_tags ?? null,
       source: 'web_search',
       source_url: found.source_url,
@@ -186,6 +191,9 @@ Contraintes :
 - Nombre de dîners à générer : ${mealPlan.num_lunches}
 - Nombre de soupers à générer : ${mealPlan.num_dinners}
 - Préférences/restrictions additionnelles : ${mealPlan.preferences ?? 'aucune'}
+- Budget maximum par portion : ${(mealPlan.budget_per_portion_cents / 100).toFixed(2)} $ — le coût estimé des
+  ingrédients par portion de chaque recette composée doit rester sous cette limite (utilise les prix des
+  aubaines ci-dessous quand l'ingrédient y figure, sinon un prix d'épicerie courant raisonnable au Québec)
 - Repas déjà verrouillés (ne pas régénérer, ne pas dupliquer ces créneaux) : ${JSON.stringify(lockedRecipes)}
 
 Priorise les ingrédients en aubaine cette semaine quand c'est cohérent avec le régime :
@@ -206,8 +214,12 @@ convient pour un repas donné, laisse "favorite_index": null et compose une nouv
 normalement :
 ${formatFavoritesForPrompt(favorites)}
 
+Estime aussi, pour chaque recette composée, les calories par portion (champ "calories_per_serving")
+et le coût des ingrédients par portion en cents canadiens (champ "estimated_cost_per_serving_cents",
+cohérent avec le budget max ci-dessus).
+
 Réponds uniquement avec un objet JSON de la forme :
-{"meals": [{"day_index": 0-6, "meal_type": "breakfast"|"lunch"|"dinner", "favorite_index": number|null, "title": string, "ingredients": [{"name": string, "quantity": number, "unit": string}], "steps": string, "prep_time_minutes": number, "diet_tags": string[]}]}`;
+{"meals": [{"day_index": 0-6, "meal_type": "breakfast"|"lunch"|"dinner", "favorite_index": number|null, "title": string, "ingredients": [{"name": string, "quantity": number, "unit": string}], "steps": string, "prep_time_minutes": number, "calories_per_serving": number, "estimated_cost_per_serving_cents": number, "diet_tags": string[]}]}`;
 }
 
 function extractJson(text: string): string {

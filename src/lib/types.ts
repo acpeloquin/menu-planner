@@ -70,6 +70,7 @@ export interface MealPlan {
   num_lunches: number;
   num_dinners: number;
   preferences: string | null;
+  budget_per_portion_cents: number;
   status: MealPlanStatus;
   created_at: string;
   updated_at: string;
@@ -88,6 +89,8 @@ export interface Recipe {
   ingredients: RecipeIngredient[];
   steps: string;
   prep_time_minutes: number | null;
+  calories_per_serving: number | null;
+  estimated_cost_per_serving_cents: number | null;
   diet_tags: string[] | null;
   source: RecipeSource;
   source_url: string | null;
