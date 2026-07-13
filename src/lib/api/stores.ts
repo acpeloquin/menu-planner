@@ -23,6 +23,11 @@ export async function createStore(name: string, websiteUrl: string | null, userI
   return data;
 }
 
+export async function deleteStore(storeId: string): Promise<void> {
+  const { error } = await supabase.from('stores').delete().eq('id', storeId);
+  if (error) throw error;
+}
+
 export async function followStore(userId: string, storeId: string): Promise<void> {
   const { error } = await supabase.from('user_stores').insert({ user_id: userId, store_id: storeId });
   if (error) throw error;

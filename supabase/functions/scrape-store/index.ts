@@ -68,6 +68,17 @@ Deno.serve(async (req) => {
           raw_text: deal.rawText,
         }));
 
+        // On repart d'une ardoise propre pour ce magasin à chaque scrape (on
+        // ne touche pas aux aubaines saisies manuellement) : sans ça, la même
+        // circulaire re-scrapée chaque jour pendant sa semaine de validité
+        // s'accumule en doublons plutôt que d'être simplement rafraîchie.
+        const { error: deleteError } = await supabase
+          .from('deals')
+          .delete()
+          .eq('store_id', store.id)
+          .eq('source', 'scraping');
+        if (deleteError) throw deleteError;
+
         if (rows.length > 0) {
           const { error: insertError } = await supabase.from('deals').insert(rows);
           if (insertError) throw insertError;

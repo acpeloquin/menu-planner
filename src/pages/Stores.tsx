@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import {
   createStore,
+  deleteStore,
   followStore,
   listStores,
   listUserStores,
@@ -73,6 +74,16 @@ export default function Stores() {
     }
   }
 
+  async function handleDelete(store: Store) {
+    if (!confirm(`Retirer "${store.name}" ? Ses aubaines seront aussi supprimées.`)) return;
+    try {
+      await deleteStore(store.id);
+      await refresh();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
   if (loading) return <p className="text-muted-foreground">Chargement…</p>;
 
   return (
@@ -125,6 +136,9 @@ export default function Stores() {
                 onClick={() => toggleFollow(store.id)}
               >
                 {followedIds.has(store.id) ? 'Ne plus suivre' : 'Suivre'}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => handleDelete(store)}>
+                Retirer
               </Button>
             </div>
           </div>
