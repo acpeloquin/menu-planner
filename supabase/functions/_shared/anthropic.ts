@@ -8,6 +8,12 @@ interface CallClaudeOptions {
     base64: string;
     mediaType: string;
   };
+  // Pour envoyer plusieurs images dans le même message (ex: les pages d'une
+  // circulaire) plutôt qu'un seul appel par image.
+  images?: {
+    base64: string;
+    mediaType: string;
+  }[];
   // deno-lint-ignore no-explicit-any
   tools?: any[];
   // Pour les tâches d'extraction/agrégation simples sans recherche web, passer
@@ -31,6 +37,12 @@ export async function callClaude(prompt: string, options: CallClaudeOptions = {}
     content.push({
       type: 'image',
       source: { type: 'base64', media_type: options.image.mediaType, data: options.image.base64 },
+    });
+  }
+  for (const image of options.images ?? []) {
+    content.push({
+      type: 'image',
+      source: { type: 'base64', media_type: image.mediaType, data: image.base64 },
     });
   }
   content.push({ type: 'text', text: prompt });

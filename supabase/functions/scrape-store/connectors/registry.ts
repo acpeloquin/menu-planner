@@ -8,7 +8,13 @@
 // dispatcher générique scrape-store gère tous les connecteurs enregistrés ici.
 import type { ScrapeStore } from './types.ts';
 import { scrapeMarcheDessaulles } from './marche-dessaulles.ts';
+import { scrapeIga } from './iga.ts';
+import { scrapeMaxi } from './maxi.ts';
+import { scrapeSuperC } from './superc.ts';
 
 export const CONNECTORS: Record<string, ScrapeStore> = {
   marche_dessaulles: scrapeMarcheDessaulles,
+  iga: scrapeIga,
+  maxi: scrapeMaxi,
+  superc: scrapeSuperC,
 };
