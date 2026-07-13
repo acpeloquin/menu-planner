@@ -58,9 +58,10 @@ Deno.serve(async (req) => {
 
     const favorites = await fetchFavoriteRecipes(supabase, mealPlan.user_id);
 
-    const prompt = `Fais UNE recherche web (un seul appel, pas plus) pour trouver une vraie recette de type
-"${mealType}" pour ${mealPlan.servings} portions, régime "${mealPlan.diets?.name ?? 'omnivore'}",
-préférences: ${mealPlan.preferences ?? 'aucune'}, sur l'un de ces sites : ${RECIPE_SITES_DESCRIPTION}.
+    const prompt = `Fais des recherches web pour trouver PLUSIEURS vraies recettes candidates (pas juste
+la première trouvée) de type "${mealType}" pour ${mealPlan.servings} portions, régime
+"${mealPlan.diets?.name ?? 'omnivore'}", préférences: ${mealPlan.preferences ?? 'aucune'}, sur l'un de
+ces sites : ${RECIPE_SITES_DESCRIPTION}. Compare-les puis choisis la meilleure candidate.
 Budget maximum par portion : ${(mealPlan.budget_per_portion_cents / 100).toFixed(2)} $ — le coût estimé
 des ingrédients par portion doit rester sous cette limite.
 Priorise ces aubaines si pertinent: ${JSON.stringify(activeDeals ?? [])}.
@@ -73,16 +74,20 @@ compatible avec le régime), PRÉFÈRE-la à une nouvelle recherche ou compositi
 uniquement avec {"favorite_index": number} (aucun autre champ) et ne fais AUCUN appel de recherche :
 ${formatFavoritesForPrompt(favorites)}
 
-Si aucun favori ne convient, fais la recherche web comme demandé plus haut. Important pour la
-rapidité : si le résumé retourné par la recherche donne déjà assez de détails (ingrédients et
-étapes), n'ouvre PAS la page complète — construis la recette directement à partir de ce résumé.
-N'utilise l'outil de récupération de page qu'en dernier recours si le résumé est vraiment
-insuffisant. Si la recherche ne donne rien d'adéquat, compose une recette toi-même sans chercher
-davantage (laisse alors "source_url" à null). Estime aussi les calories par portion et le coût
-des ingrédients par portion en cents canadiens (cohérent avec le budget max ci-dessus).
+Si aucun favori ne convient, fais les recherches web comme demandé plus haut. Important pour la
+rapidité : si les résumés de recherche donnent déjà assez de détails (ingrédients et étapes),
+n'ouvre PAS de page complète — construis la recette directement à partir du résumé de la
+meilleure candidate. N'utilise l'outil de récupération de page qu'en dernier recours, pour
+confirmer les détails de la candidate choisie ou trouver sa photo si le résumé ne suffit pas.
+Si aucune des recettes trouvées ne convient vraiment (aubaines/garde-manger/régime/budget),
+compose une recette toi-même sans chercher davantage (laisse alors "source_url" et "image_url"
+à null). Si la page source de la recette choisie affiche une photo, inclus son URL dans
+"image_url" (sinon null — n'invente jamais une URL d'image). Estime aussi les calories par
+portion et le coût des ingrédients par portion en cents canadiens (cohérent avec le budget max
+ci-dessus).
 Réponds uniquement avec un objet JSON (aucun texte avant ou après), soit la forme favori ci-dessus,
 soit :
-{"favorite_index": null, "title": string, "ingredients": [{"name": string, "quantity": number, "unit": string}], "steps": string, "prep_time_minutes": number, "calories_per_serving": number, "estimated_cost_per_serving_cents": number, "diet_tags": string[], "source_url": string|null}`;
+{"favorite_index": null, "title": string, "ingredients": [{"name": string, "quantity": number, "unit": string}], "steps": string, "prep_time_minutes": number, "calories_per_serving": number, "estimated_cost_per_serving_cents": number, "diet_tags": string[], "source_url": string|null, "image_url": string|null}`;
 
     const raw = await callClaude(prompt, { maxTokens: 4096, tools: RECIPE_SEARCH_TOOLS_LIGHT });
     const item = JSON.parse(extractJson(raw));
@@ -105,6 +110,7 @@ soit :
           diet_tags: item.diet_tags ?? null,
           source: item.source_url ? 'web_search' : 'ai_generated',
           source_url: item.source_url ?? null,
+          image_url: item.image_url ?? null,
         })
         .select('id')
         .single();

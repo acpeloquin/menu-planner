@@ -141,14 +141,18 @@ async function groundOneRecipeInRealSource(
   // deno-lint-ignore no-explicit-any
   mealPlan: any,
 ): Promise<void> {
-  const prompt = `Fais UNE recherche web (un seul appel) pour trouver une vraie recette de type
-"${meal.meal_type}" similaire à "${meal.title}", pour ${mealPlan.servings} portions, régime
-"${mealPlan.diets?.name ?? 'omnivore'}", sur l'un de ces sites : ${RECIPE_SITES_DESCRIPTION}.
-Si le résumé de recherche donne assez de détails, construis la recette à partir de ce résumé
-sans ouvrir la page complète. Estime aussi les calories par portion et le coût des ingrédients
-par portion (en dollars canadiens). Réponds uniquement avec un objet JSON (aucun texte avant/après),
-ou {"source_url": null} si rien d'adéquat n'est trouvé :
-{"title": string, "ingredients": [{"name": string, "quantity": number, "unit": string}], "steps": string, "prep_time_minutes": number, "calories_per_serving": number, "estimated_cost_per_serving_cents": number, "diet_tags": string[], "source_url": string|null}`;
+  const prompt = `Fais des recherches web pour trouver PLUSIEURS vraies recettes candidates (pas
+juste la première trouvée) de type "${meal.meal_type}" similaires à "${meal.title}", pour
+${mealPlan.servings} portions, régime "${mealPlan.diets?.name ?? 'omnivore'}", sur l'un de ces
+sites : ${RECIPE_SITES_DESCRIPTION}. Compare-les puis choisis la meilleure candidate.
+Si les résumés de recherche donnent déjà assez de détails, construis la recette directement à
+partir du résumé de la meilleure candidate, sans ouvrir de page complète. N'utilise l'outil de
+récupération de page qu'en dernier recours, pour confirmer les détails de la candidate choisie ou
+trouver sa photo. Si la page source affiche une photo, inclus son URL dans "image_url" (sinon
+null — n'invente jamais une URL d'image). Estime aussi les calories par portion et le coût des
+ingrédients par portion (en cents canadiens). Réponds uniquement avec un objet JSON (aucun texte
+avant/après), ou {"source_url": null} si rien d'adéquat n'est trouvé :
+{"title": string, "ingredients": [{"name": string, "quantity": number, "unit": string}], "steps": string, "prep_time_minutes": number, "calories_per_serving": number, "estimated_cost_per_serving_cents": number, "diet_tags": string[], "source_url": string|null, "image_url": string|null}`;
 
   const raw = await callClaude(prompt, { maxTokens: 4096, tools: RECIPE_SEARCH_TOOLS_LIGHT });
   const found = JSON.parse(extractJson(raw));
@@ -166,6 +170,7 @@ ou {"source_url": null} si rien d'adéquat n'est trouvé :
       diet_tags: found.diet_tags ?? null,
       source: 'web_search',
       source_url: found.source_url,
+      image_url: found.image_url ?? null,
     })
     .eq('id', recipeId);
 }

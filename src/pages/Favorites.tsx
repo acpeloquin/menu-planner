@@ -66,30 +66,39 @@ export default function FavoritesPage() {
           <Card key={recipe_id}>
             <CardContent className="pt-4 space-y-2">
               <div className="flex items-start justify-between gap-2">
-                <div>
-                  <p className="font-medium">{recipes.title}</p>
-                  {recipeMetaLine(recipes) && (
-                    <p className="text-xs text-muted-foreground">{recipeMetaLine(recipes)}</p>
+                <div className="flex gap-3">
+                  {recipes.image_url && (
+                    <img
+                      src={recipes.image_url}
+                      alt=""
+                      className="h-16 w-16 shrink-0 rounded object-cover"
+                    />
                   )}
-                  {recipes.diet_tags && recipes.diet_tags.length > 0 && (
-                    <div className="mt-1 flex flex-wrap gap-1">
-                      {recipes.diet_tags.map((tag) => (
-                        <Badge key={tag} variant="secondary">
-                          {tag}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-                  {recipes.source_url && (
-                    <a
-                      href={recipes.source_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-xs text-primary underline"
-                    >
-                      Voir la recette originale
-                    </a>
-                  )}
+                  <div>
+                    <p className="font-medium">{recipes.title}</p>
+                    {recipeMetaLine(recipes) && (
+                      <p className="text-xs text-muted-foreground">{recipeMetaLine(recipes)}</p>
+                    )}
+                    {recipes.diet_tags && recipes.diet_tags.length > 0 && (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {recipes.diet_tags.map((tag) => (
+                          <Badge key={tag} variant="secondary">
+                            {tag}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                    {recipes.source_url && (
+                      <a
+                        href={recipes.source_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs text-primary underline"
+                      >
+                        Voir la recette originale
+                      </a>
+                    )}
+                  </div>
                 </div>
                 <Button size="sm" variant="ghost" onClick={() => handleRemove(recipe_id)}>
                   Retirer des favoris

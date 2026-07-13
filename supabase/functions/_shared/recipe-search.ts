@@ -26,11 +26,12 @@ export const RECIPE_SITES_DESCRIPTION =
 // Les edge functions Supabase ont une limite de temps d'exécution stricte
 // (~150s). Chaque recherche/récupération de page ajoute plusieurs secondes de
 // latence côté Anthropic (recherche + lecture + raisonnement), donc le nombre
-// d'appels doit rester faible. "Light" pour un seul repas (régénération),
-// "menu" pour un plan complet (plusieurs repas, budget un peu plus large mais
-// toujours prudent pour éviter un timeout).
+// d'appels doit rester faible. "Light" pour un seul repas (régénération ou
+// ancrage best-effort dans generate-menu) : assez de recherches pour comparer
+// plus d'une recette candidate sur les sites de référence avant de se rabattre
+// sur une recette composée par l'IA, sans risquer le timeout.
 export const RECIPE_SEARCH_TOOLS_LIGHT = [
-  { type: 'web_search_20260209', name: 'web_search', allowed_domains: ALLOWED_RECIPE_DOMAINS, max_uses: 2 },
+  { type: 'web_search_20260209', name: 'web_search', allowed_domains: ALLOWED_RECIPE_DOMAINS, max_uses: 3 },
   { type: 'web_fetch_20260209', name: 'web_fetch', allowed_domains: ALLOWED_RECIPE_DOMAINS, max_uses: 1 },
 ];
 

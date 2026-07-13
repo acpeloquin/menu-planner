@@ -307,58 +307,72 @@ export default function MealPlanPage() {
           </div>
 
           {dayIndexes.map((dayIndex) => (
-            <div key={dayIndex} className="space-y-2">
+            <div
+              key={dayIndex}
+              className="space-y-2 print:break-after-page print:last:break-after-auto"
+            >
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
                 {dayLabel(mealPlan.week_start_date, dayIndex)}
               </h2>
-              {MEAL_TYPE_ORDER.filter((mealType) =>
-                byDay.get(dayIndex)!.some((mpr) => mpr.meal_type === mealType),
-              ).map((mealType) => {
-                const mpr = byDay.get(dayIndex)!.find((m) => m.meal_type === mealType)!;
-                const key = `${dayIndex}-${mealType}`;
-                return (
-                  <Card key={key} className="print:break-inside-avoid">
-                    <CardContent className="pt-4 space-y-2">
-                      <div className="flex flex-col gap-2">
-                        <div>
-                          <div className="flex items-start justify-between gap-2">
-                            <Badge variant="secondary" className="mb-1">
-                              {MEAL_TYPE_LABELS[mealType]}
-                            </Badge>
-                            <button
-                              type="button"
-                              className="print:hidden shrink-0"
-                              title={
-                                favoriteIds.has(mpr.recipe_id)
-                                  ? 'Retirer des favoris'
-                                  : 'Ajouter aux favoris'
-                              }
-                              onClick={() => handleToggleFavorite(mpr.recipe_id)}
-                            >
-                              <Star
-                                className={cn(
-                                  'h-4 w-4',
+              <div className="space-y-2 print:grid print:grid-cols-2 print:gap-3 print:space-y-0">
+                {MEAL_TYPE_ORDER.filter((mealType) =>
+                  byDay.get(dayIndex)!.some((mpr) => mpr.meal_type === mealType),
+                ).map((mealType) => {
+                  const mpr = byDay.get(dayIndex)!.find((m) => m.meal_type === mealType)!;
+                  const key = `${dayIndex}-${mealType}`;
+                  return (
+                    <Card key={key} className="print:break-inside-avoid print:shadow-none">
+                      <CardContent className="pt-4 space-y-2 print:pt-2 print:space-y-1">
+                        <div className="flex gap-3">
+                          {mpr.recipes.image_url && (
+                            <img
+                              src={mpr.recipes.image_url}
+                              alt=""
+                              className="h-16 w-16 shrink-0 rounded object-cover print:h-14 print:w-14"
+                            />
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start justify-between gap-2">
+                              <Badge variant="secondary" className="mb-1 print:text-[10px]">
+                                {MEAL_TYPE_LABELS[mealType]}
+                              </Badge>
+                              <button
+                                type="button"
+                                className="print:hidden shrink-0"
+                                title={
                                   favoriteIds.has(mpr.recipe_id)
-                                    ? 'fill-yellow-400 text-yellow-500'
-                                    : 'text-muted-foreground',
-                                )}
-                              />
-                            </button>
+                                    ? 'Retirer des favoris'
+                                    : 'Ajouter aux favoris'
+                                }
+                                onClick={() => handleToggleFavorite(mpr.recipe_id)}
+                              >
+                                <Star
+                                  className={cn(
+                                    'h-4 w-4',
+                                    favoriteIds.has(mpr.recipe_id)
+                                      ? 'fill-yellow-400 text-yellow-500'
+                                      : 'text-muted-foreground',
+                                  )}
+                                />
+                              </button>
+                            </div>
+                            <p className="font-medium print:text-sm">{mpr.recipes.title}</p>
+                            {recipeMetaLine(mpr.recipes) && (
+                              <p className="text-xs text-muted-foreground print:text-[10px]">
+                                {recipeMetaLine(mpr.recipes)}
+                              </p>
+                            )}
+                            {mpr.recipes.source_url && (
+                              <a
+                                href={mpr.recipes.source_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-xs text-primary underline print:hidden"
+                              >
+                                Voir la recette originale
+                              </a>
+                            )}
                           </div>
-                          <p className="font-medium">{mpr.recipes.title}</p>
-                          {recipeMetaLine(mpr.recipes) && (
-                            <p className="text-xs text-muted-foreground">{recipeMetaLine(mpr.recipes)}</p>
-                          )}
-                          {mpr.recipes.source_url && (
-                            <a
-                              href={mpr.recipes.source_url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-xs text-primary underline"
-                            >
-                              Voir la recette originale
-                            </a>
-                          )}
                         </div>
                         <div className="flex gap-2 print:hidden">
                           <Button
@@ -377,19 +391,19 @@ export default function MealPlanPage() {
                             {regeneratingKey === key ? '…' : 'Régénérer'}
                           </Button>
                         </div>
-                      </div>
-                      <ul className="text-sm list-disc list-inside text-muted-foreground">
-                        {mpr.recipes.ingredients.map((ing, i) => (
-                          <li key={i}>
-                            {ing.quantity} {ing.unit} {ing.name}
-                          </li>
-                        ))}
-                      </ul>
-                      <p className="text-sm">{mpr.recipes.steps}</p>
-                    </CardContent>
-                  </Card>
-                );
-              })}
+                        <ul className="text-sm list-disc list-inside text-muted-foreground print:text-[10px]">
+                          {mpr.recipes.ingredients.map((ing, i) => (
+                            <li key={i}>
+                              {ing.quantity} {ing.unit} {ing.name}
+                            </li>
+                          ))}
+                        </ul>
+                        <p className="text-sm print:text-[10px]">{mpr.recipes.steps}</p>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
             </div>
           ))}
         </div>
