@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
+  <g fill="none" stroke="#8b6f52" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.1">
+
+    <!-- whisk -->
+    <g transform="translate(55,60) rotate(-12)">
+      <line x1="0" y1="-30" x2="0" y2="-8" />
+      <path d="M -10 -8 C -18 5, -18 20, 0 30 C 18 20, 18 5, 10 -8" />
+      <path d="M -6 -6 C -10 8, -10 18, 0 26" />
+      <path d="M 6 -6 C 10 8, 10 18, 0 26" />
+    </g>
+
+    <!-- chef hat -->
+    <g transform="translate(210,45) rotate(4)">
+      <path d="M -15 10 L 15 10 L 15 0 C 22 0, 22 -12, 14 -14 C 14 -22, 2 -24, 0 -18 C -2 -24, -14 -22, -14 -14 C -22 -12, -22 0, -15 0 Z" />
+      <line x1="-15" y1="10" x2="-15" y2="16" />
+      <line x1="15" y1="10" x2="15" y2="16" />
+      <line x1="-15" y1="16" x2="15" y2="16" />
+    </g>
+
+    <!-- fork -->
+    <g transform="translate(340,90) rotate(18)">
+      <line x1="-8" y1="-30" x2="-8" y2="-12" />
+      <line x1="0" y1="-30" x2="0" y2="-12" />
+      <line x1="8" y1="-30" x2="8" y2="-12" />
+      <path d="M -8 -12 C -8 -2, 8 -2, 8 -12" />
+      <line x1="0" y1="-2" x2="0" y2="32" />
+    </g>
+
+    <!-- spoon -->
+    <g transform="translate(45,215) rotate(-6)">
+      <ellipse cx="0" cy="-16" rx="9" ry="13" />
+      <line x1="0" y1="-3" x2="0" y2="30" />
+    </g>
+
+    <!-- knife -->
+    <g transform="translate(210,190) rotate(-30)">
+      <path d="M -18 18 L 14 -14 C 24 -24, 30 -18, 20 -8 L -8 20 Z" />
+      <line x1="-18" y1="18" x2="-32" y2="32" />
+    </g>
+
+    <!-- rolling pin -->
+    <g transform="translate(320,220) rotate(-20)">
+      <line x1="-26" y1="0" x2="26" y2="0" stroke-width="7" />
+      <line x1="-36" y1="0" x2="-26" y2="0" stroke-width="3" />
+      <line x1="26" y1="0" x2="36" y2="0" stroke-width="3" />
+    </g>
+
+    <!-- pot with steam -->
+    <g transform="translate(75,320) rotate(3)">
+      <rect x="-20" y="-5" width="40" height="25" rx="3" />
+      <line x1="-28" y1="2" x2="-20" y2="2" />
+      <line x1="20" y1="2" x2="28" y2="2" />
+      <ellipse cx="0" cy="-5" rx="20" ry="4" />
+      <line x1="0" y1="-9" x2="0" y2="-14" />
+      <circle cx="0" cy="-17" r="2.5" />
+      <path d="M -7 -21 C -7 -27, -2 -27, -2 -33" />
+      <path d="M 7 -21 C 7 -27, 12 -27, 12 -33" />
+    </g>
+
+    <!-- mug with steam -->
+    <g transform="translate(230,330) rotate(-4)">
+      <rect x="-12" y="-15" width="24" height="28" rx="3" />
+      <path d="M 12 -8 C 23 -8, 23 6, 12 6" />
+      <path d="M -5 -20 C -5 -26, -1 -26, -1 -32" />
+      <path d="M 5 -20 C 5 -26, 9 -26, 9 -32" />
+    </g>
+
+    <!-- second fork (bottom-right) -->
+    <g transform="translate(350,300) rotate(-15)">
+      <line x1="-7" y1="-24" x2="-7" y2="-10" />
+      <line x1="0" y1="-24" x2="0" y2="-10" />
+      <line x1="7" y1="-24" x2="7" y2="-10" />
+      <path d="M -7 -10 C -7 -2, 7 -2, 7 -10" />
+      <line x1="0" y1="-2" x2="0" y2="26" />
+    </g>
+
+  </g>
+</svg>
