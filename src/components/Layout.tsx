@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 const navItems = [
-  { to: '/', label: 'Aubaines' },
+  { to: '/', label: 'Accueil' },
+  { to: '/aubaines', label: 'Aubaines' },
   { to: '/menu', label: 'Menu' },
   { to: '/epicerie', label: 'Épicerie' },
   { to: '/garde-manger', label: 'Garde-manger' },

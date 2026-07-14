@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from '@/hooks/useAuth';
 import Layout from '@/components/Layout';
 import Login from '@/pages/Login';
+import Home from '@/pages/Home';
 import Deals from '@/pages/Deals';
 import Stores from '@/pages/Stores';
 import MealPlanPage from '@/pages/MealPlan';
@@ -23,7 +24,8 @@ function ProtectedRoutes() {
   return (
     <Routes>
       <Route element={<Layout />}>
-        <Route index element={<Deals />} />
+        <Route index element={<Home />} />
+        <Route path="aubaines" element={<Deals />} />
         <Route path="menu" element={<MealPlanPage />} />
         <Route path="epicerie" element={<GroceryListPage />} />
         <Route path="garde-manger" element={<PantryPage />} />
