@@ -2,7 +2,7 @@
 // À régénérer avec `supabase gen types typescript` une fois le projet Supabase lié.
 
 export type DealSource = 'manual' | 'scraping';
-export type MealType = 'breakfast' | 'lunch' | 'dinner';
+export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 export type MealPlanStatus = 'draft' | 'generating' | 'ready';
 export type RecipeSource = 'ai_generated' | 'web_search' | 'manual';
 
@@ -69,6 +69,7 @@ export interface MealPlan {
   num_breakfasts: number;
   num_lunches: number;
   num_dinners: number;
+  num_snacks: number;
   preferences: string | null;
   budget_per_portion_cents: number;
   status: MealPlanStatus;

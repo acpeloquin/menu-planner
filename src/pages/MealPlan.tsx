@@ -28,9 +28,10 @@ import { cn } from '@/lib/utils';
 const MEAL_TYPE_LABELS: Record<MealType, string> = {
   breakfast: 'Déjeuner',
   lunch: 'Dîner',
+  snack: 'Collation',
   dinner: 'Souper',
 };
-const MEAL_TYPE_ORDER: MealType[] = ['breakfast', 'lunch', 'dinner'];
+const MEAL_TYPE_ORDER: MealType[] = ['breakfast', 'lunch', 'snack', 'dinner'];
 
 function mondayOfThisWeek(): string {
   const now = new Date();
@@ -66,6 +67,7 @@ export default function MealPlanPage() {
   const [numBreakfasts, setNumBreakfasts] = useState(0);
   const [numLunches, setNumLunches] = useState(3);
   const [numDinners, setNumDinners] = useState(5);
+  const [numSnacks, setNumSnacks] = useState(0);
   const [preferences, setPreferences] = useState('');
   const [budgetPerPortionCents, setBudgetPerPortionCents] = useState(700);
 
@@ -121,6 +123,7 @@ export default function MealPlanPage() {
         numBreakfasts,
         numLunches,
         numDinners,
+        numSnacks,
         preferences: preferences || null,
         budgetPerPortionCents,
       });
@@ -256,6 +259,15 @@ export default function MealPlanPage() {
                     min={0}
                     value={numDinners}
                     onChange={(e) => setNumDinners(Number(e.target.value))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Collations</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={numSnacks}
+                    onChange={(e) => setNumSnacks(Number(e.target.value))}
                   />
                 </div>
               </div>

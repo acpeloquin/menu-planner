@@ -7,7 +7,7 @@ import { fetchFavoriteRecipes, formatFavoritesForPrompt } from '../_shared/favor
 interface RegenerateMealRequest {
   mealPlanId: string;
   dayIndex: number;
-  mealType: 'breakfast' | 'lunch' | 'dinner';
+  mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack';
 }
 
 // Régénère un seul repas d'un plan existant, sans toucher aux autres.
@@ -62,6 +62,7 @@ Deno.serve(async (req) => {
 la première trouvée) de type "${mealType}" pour ${mealPlan.servings} portions, régime
 "${mealPlan.diets?.name ?? 'omnivore'}", préférences: ${mealPlan.preferences ?? 'aucune'}, sur l'un de
 ces sites : ${RECIPE_SITES_DESCRIPTION}. Compare-les puis choisis la meilleure candidate.
+${mealType === 'snack' ? 'Une collation peut être simple (fruit, yogourt, muffin, noix, etc.) — pas besoin d\'étapes de préparation élaborées, "steps" peut être aussi court que "Servir tel quel".' : ''}
 Budget maximum par portion : ${(mealPlan.budget_per_portion_cents / 100).toFixed(2)} $ — le coût estimé
 des ingrédients par portion doit rester sous cette limite.
 Priorise ces aubaines si pertinent: ${JSON.stringify(activeDeals ?? [])}.

@@ -195,6 +195,9 @@ Contraintes :
 - Nombre de déjeuners à générer : ${mealPlan.num_breakfasts}
 - Nombre de dîners à générer : ${mealPlan.num_lunches}
 - Nombre de soupers à générer : ${mealPlan.num_dinners}
+- Nombre de collations à générer : ${mealPlan.num_snacks} (des collations simples : fruit, yogourt,
+  muffin, noix, etc. — pas besoin d'étapes de préparation élaborées, "steps" peut être aussi court
+  que "Servir tel quel")
 - Préférences/restrictions additionnelles : ${mealPlan.preferences ?? 'aucune'}
 - Budget maximum par portion : ${(mealPlan.budget_per_portion_cents / 100).toFixed(2)} $ — le coût estimé des
   ingrédients par portion de chaque recette composée doit rester sous cette limite (utilise les prix des
@@ -224,7 +227,7 @@ et le coût des ingrédients par portion en cents canadiens (champ "estimated_co
 cohérent avec le budget max ci-dessus).
 
 Réponds uniquement avec un objet JSON de la forme :
-{"meals": [{"day_index": 0-6, "meal_type": "breakfast"|"lunch"|"dinner", "favorite_index": number|null, "title": string, "ingredients": [{"name": string, "quantity": number, "unit": string}], "steps": string, "prep_time_minutes": number, "calories_per_serving": number, "estimated_cost_per_serving_cents": number, "diet_tags": string[]}]}`;
+{"meals": [{"day_index": 0-6, "meal_type": "breakfast"|"lunch"|"dinner"|"snack", "favorite_index": number|null, "title": string, "ingredients": [{"name": string, "quantity": number, "unit": string}], "steps": string, "prep_time_minutes": number, "calories_per_serving": number, "estimated_cost_per_serving_cents": number, "diet_tags": string[]}]}`;
 }
 
 function extractJson(text: string): string {
