@@ -1,7 +1,7 @@
 import { corsHeaders } from '../_shared/cors.ts';
 import { createAdminClient } from '../_shared/supabase-admin.ts';
 import { callClaude } from '../_shared/anthropic.ts';
-import { RECIPE_SEARCH_TOOLS_PARALLEL, RECIPE_SITES_DESCRIPTION } from '../_shared/recipe-search.ts';
+import { RECIPE_SEARCH_TOOLS_LIGHT, RECIPE_SITES_DESCRIPTION } from '../_shared/recipe-search.ts';
 import { fetchFavoriteRecipes, formatFavoritesForPrompt, type FavoriteForPrompt } from '../_shared/favorites.ts';
 
 interface GenerateMenuRequest {
@@ -159,19 +159,24 @@ async function groundOneRecipeInRealSource(
   mealPlan: any,
 ): Promise<void> {
   const prompt = `Fais des recherches web pour trouver PLUSIEURS vraies recettes candidates (pas
-juste la première trouvée) de type "${meal.meal_type}" similaires à "${meal.title}", pour
-${mealPlan.servings} portions, régime "${mealPlan.diets?.name ?? 'omnivore'}", sur l'un de ces
-sites : ${RECIPE_SITES_DESCRIPTION}. Compare-les puis choisis la meilleure candidate.
+juste la première trouvée) de type "${meal.meal_type}" pour ${mealPlan.servings} portions, régime
+"${mealPlan.diets?.name ?? 'omnivore'}", sur l'un de ces sites : ${RECIPE_SITES_DESCRIPTION}.
+Le repas prévu était "${meal.title}" — utilise ça comme simple inspiration/thème pour orienter ta
+recherche (ex: type de protéine, cuisine, saison), mais la recette trouvée n'a PAS besoin de
+porter ce nom ni d'être identique : n'importe quelle vraie recette de ce type de repas, adaptée au
+régime, est une bonne candidate. Essaie plusieurs formulations de recherche si les premières ne
+donnent rien (ex: par ingrédient principal, par style de cuisine, plus générique) avant de
+conclure qu'il n'y a rien d'adéquat. Compare les candidates trouvées puis choisis la meilleure.
 Si les résumés de recherche donnent déjà assez de détails, construis la recette directement à
 partir du résumé de la meilleure candidate, sans ouvrir de page complète. N'utilise l'outil de
 récupération de page qu'en dernier recours, pour confirmer les détails de la candidate choisie ou
 trouver sa photo. Si la page source affiche une photo, inclus son URL dans "image_url" (sinon
 null — n'invente jamais une URL d'image). Estime aussi les calories par portion et le coût des
 ingrédients par portion (en cents canadiens). Réponds uniquement avec un objet JSON (aucun texte
-avant/après), ou {"source_url": null} si rien d'adéquat n'est trouvé :
+avant/après), ou {"source_url": null} seulement si vraiment aucune recherche n'a rien donné :
 {"title": string, "ingredients": [{"name": string, "quantity": number, "unit": string}], "steps": string, "prep_time_minutes": number, "calories_per_serving": number, "estimated_cost_per_serving_cents": number, "diet_tags": string[], "source_url": string|null, "image_url": string|null}`;
 
-  const raw = await callClaude(prompt, { maxTokens: 4096, tools: RECIPE_SEARCH_TOOLS_PARALLEL });
+  const raw = await callClaude(prompt, { maxTokens: 4096, tools: RECIPE_SEARCH_TOOLS_LIGHT });
   const found = JSON.parse(extractJson(raw));
   if (!found.source_url) return;
 
