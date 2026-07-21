@@ -52,6 +52,20 @@ export async function getLatestMealPlan(userId: string): Promise<MealPlan | null
   return data;
 }
 
+// Tous les menus de l'utilisateur, du plus récent au plus ancien — les
+// anciens ne sont jamais supprimés, ce qui sert d'archive par semaine (on
+// peut générer un nouveau menu pour la semaine en cours tout en gardant
+// celui de la semaine dernière pour continuer ses recettes).
+export async function listMealPlans(userId: string): Promise<MealPlan[]> {
+  const { data, error } = await supabase
+    .from('meal_plans')
+    .select('*')
+    .eq('user_id', userId)
+    .order('week_start_date', { ascending: false });
+  if (error) throw error;
+  return data;
+}
+
 export async function getMealPlan(mealPlanId: string): Promise<MealPlan> {
   const { data, error } = await supabase.from('meal_plans').select('*').eq('id', mealPlanId).single();
   if (error) throw error;

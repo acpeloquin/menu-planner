@@ -4,11 +4,11 @@ import { useAuth } from '@/hooks/useAuth';
 import { listDiets } from '@/lib/api/diets';
 import {
   createMealPlan,
-  getLatestMealPlan,
   getMealPlan,
   getMealPlanRecipes,
   invokeGenerateMenu,
   invokeRegenerateMeal,
+  listMealPlans,
   setMealLocked,
   type MealPlanRecipeWithRecipe,
 } from '@/lib/api/mealPlans';
@@ -52,6 +52,7 @@ function dayLabel(weekStartDate: string, dayIndex: number): string {
 export default function MealPlanPage() {
   const { user } = useAuth();
   const [diets, setDiets] = useState<Diet[]>([]);
+  const [mealPlans, setMealPlans] = useState<MealPlan[]>([]);
   const [mealPlan, setMealPlan] = useState<MealPlan | null>(null);
   const [recipes, setRecipes] = useState<MealPlanRecipeWithRecipe[]>([]);
   const [loading, setLoading] = useState(true);
@@ -78,20 +79,28 @@ export default function MealPlanPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  async function refresh() {
+  async function refresh(preferPlanId?: string) {
     if (!user) return;
-    const plan = await getLatestMealPlan(user.id);
+    const plans = await listMealPlans(user.id);
+    setMealPlans(plans);
+    const targetId = preferPlanId ?? mealPlan?.id;
+    const plan = plans.find((p) => p.id === targetId) ?? plans[0] ?? null;
+    await selectPlan(plan);
+    const favIds = await listFavoriteRecipeIds(user.id);
+    setFavoriteIds(favIds);
+    setLoading(false);
+  }
+
+  async function selectPlan(plan: MealPlan | null) {
     setMealPlan(plan);
     if (plan) {
       const r = await getMealPlanRecipes(plan.id);
       setRecipes(r);
       setShowForm(false);
     } else {
+      setRecipes([]);
       setShowForm(true);
     }
-    const favIds = await listFavoriteRecipeIds(user.id);
-    setFavoriteIds(favIds);
-    setLoading(false);
   }
 
   async function handleToggleFavorite(recipeId: string) {
@@ -130,7 +139,7 @@ export default function MealPlanPage() {
       setMealPlan(plan);
       setRecipes([]);
       await invokeGenerateMenu(plan.id);
-      await refresh();
+      await refresh(plan.id);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -141,7 +150,7 @@ export default function MealPlanPage() {
   async function handleToggleLock(mpr: MealPlanRecipeWithRecipe) {
     try {
       await setMealLocked(mpr.id, !mpr.is_locked);
-      await refresh();
+      await refresh(mealPlan?.id);
     } catch (err) {
       setError((err as Error).message);
     }
@@ -185,9 +194,31 @@ export default function MealPlanPage() {
           </p>
         </div>
         {mealPlan && !showForm && (
-          <Button variant="outline" size="sm" onClick={() => setShowForm(true)}>
-            Nouveau menu
-          </Button>
+          <div className="flex items-center gap-2">
+            {mealPlans.length > 1 && (
+              <Select
+                value={mealPlan.id}
+                onValueChange={(id) => {
+                  const plan = mealPlans.find((p) => p.id === id);
+                  if (plan) selectPlan(plan);
+                }}
+              >
+                <SelectTrigger className="w-56">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {mealPlans.map((plan) => (
+                    <SelectItem key={plan.id} value={plan.id}>
+                      Semaine du {new Date(`${plan.week_start_date}T00:00:00`).toLocaleDateString('fr-CA')}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            <Button variant="outline" size="sm" onClick={() => setShowForm(true)}>
+              Nouveau menu
+            </Button>
+          </div>
         )}
       </div>
 
