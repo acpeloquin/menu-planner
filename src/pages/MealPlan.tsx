@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { listDiets } from '@/lib/api/diets';
 import {
   createMealPlan,
+  deleteMealPlan,
   getMealPlan,
   getMealPlanRecipes,
   invokeGenerateMenu,
@@ -189,6 +190,21 @@ export default function MealPlanPage() {
     }
   }
 
+  async function handleDeletePlan(plan: MealPlan) {
+    const label = new Date(`${plan.week_start_date}T00:00:00`).toLocaleDateString('fr-CA');
+    if (!confirm(`Supprimer le menu de la semaine du ${label} ? Ses recettes et sa liste d'épicerie seront aussi supprimées.`)) {
+      return;
+    }
+    try {
+      await deleteMealPlan(plan.id);
+      // refresh() retombe sur plans[0] si le plan préféré (celui qu'on vient
+      // de supprimer) n'existe plus dans la liste fraîchement récupérée.
+      await refresh();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
   async function handleToggleLock(mpr: MealPlanRecipeWithRecipe) {
     try {
       await setMealLocked(mpr.id, !mpr.is_locked);
@@ -249,14 +265,23 @@ export default function MealPlanPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {mealPlans.map((plan) => (
-                    <SelectItem key={plan.id} value={plan.id}>
-                      Semaine du {new Date(`${plan.week_start_date}T00:00:00`).toLocaleDateString('fr-CA')}
-                    </SelectItem>
-                  ))}
+                  {mealPlans.map((plan) => {
+                    const isDuplicateWeek =
+                      mealPlans.filter((p) => p.week_start_date === plan.week_start_date).length > 1;
+                    return (
+                      <SelectItem key={plan.id} value={plan.id}>
+                        Semaine du {new Date(`${plan.week_start_date}T00:00:00`).toLocaleDateString('fr-CA')}
+                        {isDuplicateWeek &&
+                          ` (créé à ${new Date(plan.created_at).toLocaleTimeString('fr-CA', { hour: '2-digit', minute: '2-digit' })})`}
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             )}
+            <Button variant="outline" size="sm" onClick={() => handleDeletePlan(mealPlan)}>
+              Supprimer ce menu
+            </Button>
             <Button variant="outline" size="sm" onClick={() => setShowForm(true)}>
               Nouveau menu
             </Button>

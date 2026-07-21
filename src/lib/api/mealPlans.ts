@@ -66,6 +66,14 @@ export async function listMealPlans(userId: string): Promise<MealPlan[]> {
   return data;
 }
 
+// Supprime un menu (et en cascade ses meal_plan_recipes / liste d'épicerie
+// générée) — utile quand plusieurs menus ont été générés pour la même
+// semaine et qu'on veut n'en garder qu'un pour la liste d'épicerie.
+export async function deleteMealPlan(mealPlanId: string): Promise<void> {
+  const { error } = await supabase.from('meal_plans').delete().eq('id', mealPlanId);
+  if (error) throw error;
+}
+
 export async function getMealPlan(mealPlanId: string): Promise<MealPlan> {
   const { data, error } = await supabase.from('meal_plans').select('*').eq('id', mealPlanId).single();
   if (error) throw error;
