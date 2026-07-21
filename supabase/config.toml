@@ -20,6 +20,9 @@ verify_jwt = true
 [functions.regenerate-meal]
 verify_jwt = true
 
+[functions.ground-recipe]
+verify_jwt = true
+
 [functions.generate-grocery-list]
 verify_jwt = true
 

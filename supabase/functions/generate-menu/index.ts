@@ -1,7 +1,6 @@
 import { corsHeaders } from '../_shared/cors.ts';
 import { createAdminClient } from '../_shared/supabase-admin.ts';
 import { callClaude } from '../_shared/anthropic.ts';
-import { RECIPE_SEARCH_TOOLS_LIGHT, RECIPE_SITES_DESCRIPTION } from '../_shared/recipe-search.ts';
 import { fetchFavoriteRecipes, formatFavoritesForPrompt, type FavoriteForPrompt } from '../_shared/favorites.ts';
 
 interface GenerateMenuRequest {
@@ -13,27 +12,22 @@ interface GenerateMenuRequest {
 // meal_plan_recipes. Les repas verrouillés (is_locked=true) ne sont jamais
 // régénérés par cette fonction.
 //
-// La composition initiale se fait SANS recherche web (rapide et fiable —
+// Cette fonction ne fait QUE la composition rapide (SANS recherche web) —
 // décide de la répartition jour/type de repas, de la variété, de l'usage des
-// aubaines/garde-manger/favoris). Chaque repas composé par l'IA (donc pas déjà
-// une recette favorite réutilisée) est ensuite "ancré" au mieux dans une
-// vraie recette trouvée sur les sites de référence — même logique que
-// regenerate-meal, une vraie recette est toujours essayée avant de se
-// contenter d'une recette composée par l'IA. Ces ancrages tournent EN
-// PARALLÈLE (Promise.all), chacun indépendamment best-effort (échec d'un seul
-// repas n'affecte pas les autres).
+// aubaines/garde-manger/favoris. Ancrer chaque repas composé dans une vraie
+// recette (recherche web sur les sites de référence) se fait ENSUITE, un
+// repas à la fois, via des appels séparés à ground-recipe déclenchés par le
+// frontend (voir invokeGroundRecipe dans src/lib/api/mealPlans.ts).
 //
-// Limité à MAX_PARALLEL_GROUNDINGS repas par génération : un premier essai
-// sans plafond a provoqué un timeout (504) sur un menu de plusieurs repas —
-// même en parallèle, trop d'appels simultanés avec outils de recherche
-// dépasse la limite d'inactivité de ~150s des edge functions Supabase
-// (l'API Anthropic elle-même ne traite qu'un nombre limité d'appels
-// concurrents avec outils avant de mettre les autres en attente). Les repas
-// au-delà du plafond restent composés par l'IA ; l'utilisateur peut cliquer
-// "Régénérer" sur chacun pour obtenir le même traitement de recherche
-// individuellement (budget de 150s par repas, déjà fiable).
-const MAX_PARALLEL_GROUNDINGS = 6;
-
+// Historique : on a essayé de faire l'ancrage ICI, dans cette même invocation
+// (d'abord un seul repas, puis tous en parallèle avec Promise.all, plafonnés
+// à 6). Les deux approches ont fini par produire un timeout (504) sur un
+// menu réel — même en parallèle et plafonné, plusieurs appels Claude avec
+// outils de recherche partageant le même budget d'inactivité de ~150s (et
+// l'API Anthropic elle-même semble mettre en file les appels concurrents
+// avec outils) dépassent cette limite. Faire l'ancrage depuis des invocations
+// edge function SÉPARÉES (une par repas) élimine le problème : chacune a son
+// propre budget de 150s, indépendant des autres.
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -76,10 +70,10 @@ Deno.serve(async (req) => {
     const raw = await callClaude(prompt, { maxTokens: 16000 });
     const generated = JSON.parse(extractJson(raw));
 
-    // Chaque repas composé par l'IA (pas réutilisé d'un favori) est un candidat
-    // pour l'ancrage dans une vraie recette plus bas — une recette favorite est
-    // déjà "connue", elle n'a pas besoin d'être ancrée.
-    const groundingCandidates: { recipeId: string; meal: unknown }[] = [];
+    // Chaque repas composé par l'IA (pas réutilisé d'un favori) est renvoyé au
+    // frontend comme cible d'ancrage — une recette favorite est déjà "connue",
+    // elle n'a pas besoin d'être ancrée dans une vraie recette.
+    const groundingTargets: { recipeId: string; dayIndex: number; mealType: string; title: string }[] = [];
 
     for (const item of generated.meals) {
       let recipeId: string;
@@ -107,7 +101,7 @@ Deno.serve(async (req) => {
           .single();
         if (recipeError || !recipe) throw recipeError ?? new Error('Échec de création de la recette');
         recipeId = recipe.id;
-        groundingCandidates.push({ recipeId, meal: item });
+        groundingTargets.push({ recipeId, dayIndex: item.day_index, mealType: item.meal_type, title: item.title });
       }
 
       await supabase.from('meal_plan_recipes').upsert(
@@ -122,28 +116,9 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Ancre jusqu'à MAX_PARALLEL_GROUNDINGS repas composés dans une vraie
-    // recette trouvée par recherche web, EN PARALLÈLE — chacun best-effort
-    // indépendamment : si l'un échoue ou ne trouve rien, on garde sa recette
-    // composée par l'IA sans affecter les autres ni faire échouer la
-    // génération du menu.
-    // deno-lint-ignore no-explicit-any
-    const groundingDebug: any[] = await Promise.all(
-      groundingCandidates.slice(0, MAX_PARALLEL_GROUNDINGS).map(async (candidate) => {
-        // deno-lint-ignore no-explicit-any
-        const meal = candidate.meal as any;
-        try {
-          const result = await groundOneRecipeInRealSource(supabase, candidate.recipeId, candidate.meal, mealPlan);
-          return { title: meal.title, mealType: meal.meal_type, ...result };
-        } catch (err) {
-          return { title: meal.title, mealType: meal.meal_type, outcome: 'error', detail: (err as Error).message };
-        }
-      }),
-    );
-
     await supabase.from('meal_plans').update({ status: 'ready' }).eq('id', mealPlanId);
 
-    return new Response(JSON.stringify({ ok: true, count: generated.meals.length, debug: groundingDebug }), {
+    return new Response(JSON.stringify({ ok: true, count: generated.meals.length, groundingTargets }), {
       headers: { ...corsHeaders, 'content-type': 'application/json' },
     });
   } catch (error) {
@@ -153,62 +128,6 @@ Deno.serve(async (req) => {
     });
   }
 });
-
-// deno-lint-ignore no-explicit-any
-async function groundOneRecipeInRealSource(
-  // deno-lint-ignore no-explicit-any
-  supabase: any,
-  recipeId: string,
-  // deno-lint-ignore no-explicit-any
-  meal: any,
-  // deno-lint-ignore no-explicit-any
-  mealPlan: any,
-// deno-lint-ignore no-explicit-any
-): Promise<any> {
-  const prompt = `Fais des recherches web pour trouver PLUSIEURS vraies recettes candidates (pas
-juste la première trouvée) de type "${meal.meal_type}" pour ${mealPlan.servings} portions, régime
-"${mealPlan.diets?.name ?? 'omnivore'}", sur l'un de ces sites : ${RECIPE_SITES_DESCRIPTION}.
-Le repas prévu était "${meal.title}" — utilise ça comme simple inspiration/thème pour orienter ta
-recherche (ex: type de protéine, cuisine, saison), mais la recette trouvée n'a PAS besoin de
-porter ce nom ni d'être identique : n'importe quelle vraie recette de ce type de repas, adaptée au
-régime, est une bonne candidate. Essaie plusieurs formulations de recherche si les premières ne
-donnent rien (ex: par ingrédient principal, par style de cuisine, plus générique) avant de
-conclure qu'il n'y a rien d'adéquat. Compare les candidates trouvées puis choisis la meilleure.
-Si les résumés de recherche donnent déjà assez de détails, construis la recette directement à
-partir du résumé de la meilleure candidate, sans ouvrir de page complète. N'utilise l'outil de
-récupération de page qu'en dernier recours, pour confirmer les détails de la candidate choisie ou
-trouver sa photo. Si la page source affiche une photo, inclus son URL dans "image_url" (sinon
-null — n'invente jamais une URL d'image). Estime aussi les calories par portion et le coût des
-ingrédients par portion (en cents canadiens). Réponds uniquement avec un objet JSON (aucun texte
-avant/après), ou {"source_url": null} seulement si vraiment aucune recherche n'a rien donné :
-{"title": string, "ingredients": [{"name": string, "quantity": number, "unit": string}], "steps": string, "prep_time_minutes": number, "calories_per_serving": number, "estimated_cost_per_serving_cents": number, "diet_tags": string[], "source_url": string|null, "image_url": string|null}`;
-
-  const raw = await callClaude(prompt, { maxTokens: 4096, tools: RECIPE_SEARCH_TOOLS_LIGHT });
-  const found = JSON.parse(extractJson(raw));
-  if (!found.source_url) {
-    // Diagnostic temporaire (champ "debug" de la réponse), à retirer une fois
-    // la cause du taux d'échec élevé confirmée et corrigée.
-    return { outcome: 'no-match', rawSnippet: raw.slice(0, 300) };
-  }
-
-  await supabase
-    .from('recipes')
-    .update({
-      title: found.title,
-      ingredients: found.ingredients,
-      steps: found.steps,
-      prep_time_minutes: found.prep_time_minutes,
-      calories_per_serving: found.calories_per_serving ?? null,
-      estimated_cost_per_serving_cents: found.estimated_cost_per_serving_cents ?? null,
-      diet_tags: found.diet_tags ?? null,
-      source: 'web_search',
-      source_url: found.source_url,
-      image_url: found.image_url ?? null,
-    })
-    .eq('id', recipeId);
-
-  return { outcome: 'grounded', source_url: found.source_url };
-}
 
 // deno-lint-ignore no-explicit-any
 function buildMenuPrompt(
