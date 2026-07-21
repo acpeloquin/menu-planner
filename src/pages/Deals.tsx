@@ -19,6 +19,13 @@ interface DraftDeal extends ParsedDeal {
 const today = new Date().toISOString().slice(0, 10);
 const inWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
+function formatValidityRange(validFrom: string, validTo: string): string {
+  const opts: Intl.DateTimeFormatOptions = { weekday: 'long', day: 'numeric', month: 'long' };
+  const from = new Date(`${validFrom}T00:00:00`).toLocaleDateString('fr-CA', opts);
+  const to = new Date(`${validTo}T00:00:00`).toLocaleDateString('fr-CA', opts);
+  return `${from} au ${to}`;
+}
+
 export default function Deals() {
   const { user } = useAuth();
   const [stores, setStores] = useState<Store[]>([]);
@@ -251,6 +258,9 @@ export default function Deals() {
                 {deal.stores?.name} · {(deal.price_cents / 100).toFixed(2)} $
                 {deal.price_unit ? ` ${deal.price_unit}` : ''}
                 {deal.package_format ? ` · ${deal.package_format}` : ''}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {formatValidityRange(deal.valid_from, deal.valid_to)}
               </p>
             </div>
             <div className="flex gap-1">
