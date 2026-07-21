@@ -127,17 +127,23 @@ Deno.serve(async (req) => {
     // indépendamment : si l'un échoue ou ne trouve rien, on garde sa recette
     // composée par l'IA sans affecter les autres ni faire échouer la
     // génération du menu.
-    await Promise.all(
-      groundingCandidates.slice(0, MAX_PARALLEL_GROUNDINGS).map((candidate) =>
-        groundOneRecipeInRealSource(supabase, candidate.recipeId, candidate.meal, mealPlan).catch(() => {
-          // best-effort : on garde la recette composée par l'IA pour ce repas
-        }),
-      ),
+    // deno-lint-ignore no-explicit-any
+    const groundingDebug: any[] = await Promise.all(
+      groundingCandidates.slice(0, MAX_PARALLEL_GROUNDINGS).map(async (candidate) => {
+        // deno-lint-ignore no-explicit-any
+        const meal = candidate.meal as any;
+        try {
+          const result = await groundOneRecipeInRealSource(supabase, candidate.recipeId, candidate.meal, mealPlan);
+          return { title: meal.title, mealType: meal.meal_type, ...result };
+        } catch (err) {
+          return { title: meal.title, mealType: meal.meal_type, outcome: 'error', detail: (err as Error).message };
+        }
+      }),
     );
 
     await supabase.from('meal_plans').update({ status: 'ready' }).eq('id', mealPlanId);
 
-    return new Response(JSON.stringify({ ok: true, count: generated.meals.length }), {
+    return new Response(JSON.stringify({ ok: true, count: generated.meals.length, debug: groundingDebug }), {
       headers: { ...corsHeaders, 'content-type': 'application/json' },
     });
   } catch (error) {
@@ -157,7 +163,8 @@ async function groundOneRecipeInRealSource(
   meal: any,
   // deno-lint-ignore no-explicit-any
   mealPlan: any,
-): Promise<void> {
+// deno-lint-ignore no-explicit-any
+): Promise<any> {
   const prompt = `Fais des recherches web pour trouver PLUSIEURS vraies recettes candidates (pas
 juste la première trouvée) de type "${meal.meal_type}" pour ${mealPlan.servings} portions, régime
 "${mealPlan.diets?.name ?? 'omnivore'}", sur l'un de ces sites : ${RECIPE_SITES_DESCRIPTION}.
@@ -178,7 +185,11 @@ avant/après), ou {"source_url": null} seulement si vraiment aucune recherche n'
 
   const raw = await callClaude(prompt, { maxTokens: 4096, tools: RECIPE_SEARCH_TOOLS_LIGHT });
   const found = JSON.parse(extractJson(raw));
-  if (!found.source_url) return;
+  if (!found.source_url) {
+    // Diagnostic temporaire (champ "debug" de la réponse), à retirer une fois
+    // la cause du taux d'échec élevé confirmée et corrigée.
+    return { outcome: 'no-match', rawSnippet: raw.slice(0, 300) };
+  }
 
   await supabase
     .from('recipes')
@@ -195,6 +206,8 @@ avant/après), ou {"source_url": null} seulement si vraiment aucune recherche n'
       image_url: found.image_url ?? null,
     })
     .eq('id', recipeId);
+
+  return { outcome: 'grounded', source_url: found.source_url };
 }
 
 // deno-lint-ignore no-explicit-any

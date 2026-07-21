@@ -91,8 +91,11 @@ export async function setMealLocked(mealPlanRecipeId: string, isLocked: boolean)
 }
 
 export async function invokeGenerateMenu(mealPlanId: string): Promise<void> {
-  const { error } = await supabase.functions.invoke('generate-menu', { body: { mealPlanId } });
+  const { data, error } = await supabase.functions.invoke('generate-menu', { body: { mealPlanId } });
   if (error) throw error;
+  // Diagnostic temporaire pour la recherche de vraies recettes (F12 > Console) —
+  // à retirer une fois la cause du taux d'échec élevé confirmée et corrigée.
+  if (data?.debug) console.log('generate-menu debug:', data.debug);
 }
 
 export async function invokeRegenerateMeal(
