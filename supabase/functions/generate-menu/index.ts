@@ -19,11 +19,21 @@ interface GenerateMenuRequest {
 // une recette favorite réutilisée) est ensuite "ancré" au mieux dans une
 // vraie recette trouvée sur les sites de référence — même logique que
 // regenerate-meal, une vraie recette est toujours essayée avant de se
-// contenter d'une recette composée par l'IA. Tous ces ancrages tournent EN
+// contenter d'une recette composée par l'IA. Ces ancrages tournent EN
 // PARALLÈLE (Promise.all), chacun indépendamment best-effort (échec d'un seul
-// repas n'affecte pas les autres) : lancés en série, chercher une vraie
-// recette pour chaque repas d'un menu de plusieurs repas dépasserait
-// largement la limite d'inactivité de ~150s des edge functions Supabase.
+// repas n'affecte pas les autres).
+//
+// Limité à MAX_PARALLEL_GROUNDINGS repas par génération : un premier essai
+// sans plafond a provoqué un timeout (504) sur un menu de plusieurs repas —
+// même en parallèle, trop d'appels simultanés avec outils de recherche
+// dépasse la limite d'inactivité de ~150s des edge functions Supabase
+// (l'API Anthropic elle-même ne traite qu'un nombre limité d'appels
+// concurrents avec outils avant de mettre les autres en attente). Les repas
+// au-delà du plafond restent composés par l'IA ; l'utilisateur peut cliquer
+// "Régénérer" sur chacun pour obtenir le même traitement de recherche
+// individuellement (budget de 150s par repas, déjà fiable).
+const MAX_PARALLEL_GROUNDINGS = 6;
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -112,12 +122,13 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Ancre chaque repas composé dans une vraie recette trouvée par recherche
-    // web, EN PARALLÈLE — chacun best-effort indépendamment : si l'un échoue
-    // ou ne trouve rien, on garde sa recette composée par l'IA sans affecter
-    // les autres ni faire échouer la génération du menu.
+    // Ancre jusqu'à MAX_PARALLEL_GROUNDINGS repas composés dans une vraie
+    // recette trouvée par recherche web, EN PARALLÈLE — chacun best-effort
+    // indépendamment : si l'un échoue ou ne trouve rien, on garde sa recette
+    // composée par l'IA sans affecter les autres ni faire échouer la
+    // génération du menu.
     await Promise.all(
-      groundingCandidates.map((candidate) =>
+      groundingCandidates.slice(0, MAX_PARALLEL_GROUNDINGS).map((candidate) =>
         groundOneRecipeInRealSource(supabase, candidate.recipeId, candidate.meal, mealPlan).catch(() => {
           // best-effort : on garde la recette composée par l'IA pour ce repas
         }),
