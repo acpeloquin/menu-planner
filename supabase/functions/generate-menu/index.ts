@@ -1,7 +1,7 @@
 import { corsHeaders } from '../_shared/cors.ts';
 import { createAdminClient } from '../_shared/supabase-admin.ts';
 import { callClaude } from '../_shared/anthropic.ts';
-import { RECIPE_SEARCH_TOOLS_LIGHT, RECIPE_SITES_DESCRIPTION } from '../_shared/recipe-search.ts';
+import { RECIPE_SEARCH_TOOLS_PARALLEL, RECIPE_SITES_DESCRIPTION } from '../_shared/recipe-search.ts';
 import { fetchFavoriteRecipes, formatFavoritesForPrompt, type FavoriteForPrompt } from '../_shared/favorites.ts';
 
 interface GenerateMenuRequest {
@@ -13,13 +13,17 @@ interface GenerateMenuRequest {
 // meal_plan_recipes. Les repas verrouillés (is_locked=true) ne sont jamais
 // régénérés par cette fonction.
 //
-// La génération de base se fait SANS recherche web (rapide et fiable — les
-// edge functions Supabase ont une limite d'inactivité de ~150s, et chercher
-// une vraie recette pour chaque repas dépasse largement ce budget pour un
-// menu de plusieurs repas). Un seul repas est ensuite "ancré" dans une vraie
-// recette via recherche web (même approche que regenerate-meal), en tâche
-// best-effort : si ça échoue ou prend trop de temps, on garde la version
-// composée par l'IA plutôt que de faire échouer toute la génération.
+// La composition initiale se fait SANS recherche web (rapide et fiable —
+// décide de la répartition jour/type de repas, de la variété, de l'usage des
+// aubaines/garde-manger/favoris). Chaque repas composé par l'IA (donc pas déjà
+// une recette favorite réutilisée) est ensuite "ancré" au mieux dans une
+// vraie recette trouvée sur les sites de référence — même logique que
+// regenerate-meal, une vraie recette est toujours essayée avant de se
+// contenter d'une recette composée par l'IA. Tous ces ancrages tournent EN
+// PARALLÈLE (Promise.all), chacun indépendamment best-effort (échec d'un seul
+// repas n'affecte pas les autres) : lancés en série, chercher une vraie
+// recette pour chaque repas d'un menu de plusieurs repas dépasserait
+// largement la limite d'inactivité de ~150s des edge functions Supabase.
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -62,10 +66,10 @@ Deno.serve(async (req) => {
     const raw = await callClaude(prompt, { maxTokens: 16000 });
     const generated = JSON.parse(extractJson(raw));
 
-    // Le premier repas composé (pas réutilisé d'un favori) sert de candidat pour
-    // l'ancrage best-effort dans une vraie recette via recherche web plus bas —
-    // une recette favorite est déjà "connue", elle n'a pas besoin d'être ancrée.
-    let groundingCandidate: { recipeId: string; meal: unknown } | null = null;
+    // Chaque repas composé par l'IA (pas réutilisé d'un favori) est un candidat
+    // pour l'ancrage dans une vraie recette plus bas — une recette favorite est
+    // déjà "connue", elle n'a pas besoin d'être ancrée.
+    const groundingCandidates: { recipeId: string; meal: unknown }[] = [];
 
     for (const item of generated.meals) {
       let recipeId: string;
@@ -93,7 +97,7 @@ Deno.serve(async (req) => {
           .single();
         if (recipeError || !recipe) throw recipeError ?? new Error('Échec de création de la recette');
         recipeId = recipe.id;
-        groundingCandidate ??= { recipeId, meal: item };
+        groundingCandidates.push({ recipeId, meal: item });
       }
 
       await supabase.from('meal_plan_recipes').upsert(
@@ -108,15 +112,17 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Meilleur effort : ancre UN repas dans une vraie recette trouvée par recherche
-    // web. Ne doit jamais faire échouer la génération du menu si ça timeout/échoue.
-    if (groundingCandidate) {
-      try {
-        await groundOneRecipeInRealSource(supabase, groundingCandidate.recipeId, groundingCandidate.meal, mealPlan);
-      } catch (_err) {
-        // best-effort : on garde la recette composée par l'IA pour ce repas
-      }
-    }
+    // Ancre chaque repas composé dans une vraie recette trouvée par recherche
+    // web, EN PARALLÈLE — chacun best-effort indépendamment : si l'un échoue
+    // ou ne trouve rien, on garde sa recette composée par l'IA sans affecter
+    // les autres ni faire échouer la génération du menu.
+    await Promise.all(
+      groundingCandidates.map((candidate) =>
+        groundOneRecipeInRealSource(supabase, candidate.recipeId, candidate.meal, mealPlan).catch(() => {
+          // best-effort : on garde la recette composée par l'IA pour ce repas
+        }),
+      ),
+    );
 
     await supabase.from('meal_plans').update({ status: 'ready' }).eq('id', mealPlanId);
 
@@ -154,7 +160,7 @@ ingrédients par portion (en cents canadiens). Réponds uniquement avec un objet
 avant/après), ou {"source_url": null} si rien d'adéquat n'est trouvé :
 {"title": string, "ingredients": [{"name": string, "quantity": number, "unit": string}], "steps": string, "prep_time_minutes": number, "calories_per_serving": number, "estimated_cost_per_serving_cents": number, "diet_tags": string[], "source_url": string|null, "image_url": string|null}`;
 
-  const raw = await callClaude(prompt, { maxTokens: 4096, tools: RECIPE_SEARCH_TOOLS_LIGHT });
+  const raw = await callClaude(prompt, { maxTokens: 4096, tools: RECIPE_SEARCH_TOOLS_PARALLEL });
   const found = JSON.parse(extractJson(raw));
   if (!found.source_url) return;
 
