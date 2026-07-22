@@ -32,8 +32,13 @@ Texte à parser :
 ${text}
 """`;
 
-    const raw = await callClaude(prompt, { maxTokens: 4096, thinking: { type: 'disabled' } });
-    const deals = JSON.parse(extractJson(raw));
+    const raw = await callClaude(prompt, { maxTokens: 16000, thinking: { type: 'disabled' } });
+    let deals;
+    try {
+      deals = JSON.parse(extractJson(raw));
+    } catch (_parseError) {
+      throw new Error(`Réponse de Claude incomplète ou invalide (probablement tronquée) : ${raw.slice(0, 200)}...`);
+    }
 
     return new Response(JSON.stringify({ deals }), {
       headers: { ...corsHeaders, 'content-type': 'application/json' },
