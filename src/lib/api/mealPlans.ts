@@ -98,36 +98,8 @@ export async function setMealLocked(mealPlanRecipeId: string, isLocked: boolean)
   if (error) throw error;
 }
 
-export interface GroundingTarget {
-  recipeId: string;
-  dayIndex: number;
-  mealType: MealType;
-  title: string;
-}
-
-// Compose rapidement le menu (sans recherche web) et renvoie les repas
-// composés par l'IA (pas une recette favorite réutilisée) — à ancrer ensuite
-// un par un via invokeGroundRecipe. Voir generate-menu/index.ts pour le
-// pourquoi de cette séparation (timeout 504 quand l'ancrage se faisait dans
-// la même invocation).
-export async function invokeGenerateMenu(mealPlanId: string): Promise<GroundingTarget[]> {
-  const { data, error } = await supabase.functions.invoke('generate-menu', { body: { mealPlanId } });
-  if (error) throw error;
-  return (data?.groundingTargets ?? []) as GroundingTarget[];
-}
-
-// Tente d'ancrer une recette déjà composée dans une vraie recette trouvée sur
-// les sites de référence (best-effort : ne lève pas si rien n'est trouvé).
-export async function invokeGroundRecipe(
-  recipeId: string,
-  mealType: MealType,
-  title: string,
-  servings: number,
-  dietName: string | null,
-): Promise<void> {
-  const { error } = await supabase.functions.invoke('ground-recipe', {
-    body: { recipeId, mealType, title, servings, dietName },
-  });
+export async function invokeGenerateMenu(mealPlanId: string): Promise<void> {
+  const { error } = await supabase.functions.invoke('generate-menu', { body: { mealPlanId } });
   if (error) throw error;
 }
 

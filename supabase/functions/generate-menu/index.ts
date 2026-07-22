@@ -12,22 +12,15 @@ interface GenerateMenuRequest {
 // meal_plan_recipes. Les repas verrouillés (is_locked=true) ne sont jamais
 // régénérés par cette fonction.
 //
-// Cette fonction ne fait QUE la composition rapide (SANS recherche web) —
-// décide de la répartition jour/type de repas, de la variété, de l'usage des
-// aubaines/garde-manger/favoris. Ancrer chaque repas composé dans une vraie
-// recette (recherche web sur les sites de référence) se fait ENSUITE, un
-// repas à la fois, via des appels séparés à ground-recipe déclenchés par le
-// frontend (voir invokeGroundRecipe dans src/lib/api/mealPlans.ts).
+// Composition IA uniquement — décide de la répartition jour/type de repas,
+// de la variété, de l'usage des aubaines/garde-manger/favoris.
 //
-// Historique : on a essayé de faire l'ancrage ICI, dans cette même invocation
-// (d'abord un seul repas, puis tous en parallèle avec Promise.all, plafonnés
-// à 6). Les deux approches ont fini par produire un timeout (504) sur un
-// menu réel — même en parallèle et plafonné, plusieurs appels Claude avec
-// outils de recherche partageant le même budget d'inactivité de ~150s (et
-// l'API Anthropic elle-même semble mettre en file les appels concurrents
-// avec outils) dépassent cette limite. Faire l'ancrage depuis des invocations
-// edge function SÉPARÉES (une par repas) élimine le problème : chacune a son
-// propre budget de 150s, indépendant des autres.
+// Historique : on a exploré l'ancrage de chaque recette dans une vraie
+// recette trouvée par recherche web sur des sites de référence (d'abord un
+// seul repas, puis tous en parallèle, puis via des appels séparés type
+// ground-recipe). Abandonné : ça consommait beaucoup trop de tokens/coût
+// pour la valeur ajoutée, en plus d'avoir provoqué plusieurs timeouts (504)
+// en cours de route. On reste sur des recettes composées par l'IA.
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -70,11 +63,6 @@ Deno.serve(async (req) => {
     const raw = await callClaude(prompt, { maxTokens: 16000 });
     const generated = JSON.parse(extractJson(raw));
 
-    // Chaque repas composé par l'IA (pas réutilisé d'un favori) est renvoyé au
-    // frontend comme cible d'ancrage — une recette favorite est déjà "connue",
-    // elle n'a pas besoin d'être ancrée dans une vraie recette.
-    const groundingTargets: { recipeId: string; dayIndex: number; mealType: string; title: string }[] = [];
-
     for (const item of generated.meals) {
       let recipeId: string;
 
@@ -101,7 +89,6 @@ Deno.serve(async (req) => {
           .single();
         if (recipeError || !recipe) throw recipeError ?? new Error('Échec de création de la recette');
         recipeId = recipe.id;
-        groundingTargets.push({ recipeId, dayIndex: item.day_index, mealType: item.meal_type, title: item.title });
       }
 
       await supabase.from('meal_plan_recipes').upsert(
@@ -118,7 +105,7 @@ Deno.serve(async (req) => {
 
     await supabase.from('meal_plans').update({ status: 'ready' }).eq('id', mealPlanId);
 
-    return new Response(JSON.stringify({ ok: true, count: generated.meals.length, groundingTargets }), {
+    return new Response(JSON.stringify({ ok: true, count: generated.meals.length }), {
       headers: { ...corsHeaders, 'content-type': 'application/json' },
     });
   } catch (error) {

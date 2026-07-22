@@ -8,7 +8,6 @@ import {
   getMealPlan,
   getMealPlanRecipes,
   invokeGenerateMenu,
-  invokeGroundRecipe,
   invokeRegenerateMeal,
   listMealPlans,
   setMealLocked,
@@ -51,25 +50,6 @@ function dayLabel(weekStartDate: string, dayIndex: number): string {
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
-// Traite `items` avec au plus `limit` appels de `fn` en vol en même temps.
-// Utilisé pour ancrer les repas d'un menu un par un (chacun a son propre
-// budget de 150s côté edge function) sans en lancer trop à la fois — voir
-// generate-menu/index.ts pour le contexte (timeout 504 avec trop de front).
-async function mapWithConcurrency<T>(
-  items: T[],
-  limit: number,
-  fn: (item: T, index: number) => Promise<void>,
-): Promise<void> {
-  let nextIndex = 0;
-  async function worker() {
-    while (nextIndex < items.length) {
-      const current = nextIndex++;
-      await fn(items[current], current);
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => worker()));
-}
-
 export default function MealPlanPage() {
   const { user } = useAuth();
   const [diets, setDiets] = useState<Diet[]>([]);
@@ -78,7 +58,6 @@ export default function MealPlanPage() {
   const [recipes, setRecipes] = useState<MealPlanRecipeWithRecipe[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
-  const [groundingProgress, setGroundingProgress] = useState<{ done: number; total: number } | null>(null);
   const [regeneratingKey, setRegeneratingKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -160,29 +139,8 @@ export default function MealPlanPage() {
       });
       setMealPlan(plan);
       setRecipes([]);
-      const groundingTargets = await invokeGenerateMenu(plan.id);
+      await invokeGenerateMenu(plan.id);
       await refresh(plan.id);
-
-      // Ancre chaque repas composé dans une vraie recette, un par un (2 en
-      // même temps) — voir generate-menu/index.ts pour le pourquoi (ça
-      // timeoutait quand c'était fait en groupe dans la même invocation).
-      if (groundingTargets.length > 0) {
-        const dietName = diets.find((d) => d.id === dietId)?.name ?? null;
-        setGroundingProgress({ done: 0, total: groundingTargets.length });
-        let done = 0;
-        await mapWithConcurrency(groundingTargets, 2, async (target) => {
-          try {
-            await invokeGroundRecipe(target.recipeId, target.mealType, target.title, servings, dietName);
-          } catch {
-            // best-effort : la recette composée par l'IA reste en place
-          } finally {
-            done += 1;
-            setGroundingProgress({ done, total: groundingTargets.length });
-          }
-        });
-        setGroundingProgress(null);
-        await refresh(plan.id);
-      }
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -403,12 +361,6 @@ export default function MealPlanPage() {
 
       {mealPlan && !showForm && (
         <div className="space-y-4">
-          {groundingProgress && (
-            <p className="text-sm text-muted-foreground print:hidden">
-              Recherche de vraies recettes sur les sites de référence… {groundingProgress.done}/
-              {groundingProgress.total}
-            </p>
-          )}
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
               Semaine du {new Date(`${mealPlan.week_start_date}T00:00:00`).toLocaleDateString('fr-CA')} ·{' '}
