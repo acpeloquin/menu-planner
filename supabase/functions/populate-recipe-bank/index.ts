@@ -7,9 +7,10 @@ import {
   firstImage,
   parseIsoDurationMinutes,
 } from '../_shared/recipe-jsonld.ts';
+import { extractRecipeMicrodata } from '../_shared/recipe-microdata.ts';
 
 interface PopulateRequest {
-  site: 'ricardo' | 'soscuisine' | 'ottolenghi';
+  site: 'ricardo' | 'soscuisine' | 'ottolenghi' | 'metro';
   urls: string[];
 }
 
@@ -30,7 +31,8 @@ interface RawRecipe {
 // d'URLs de recettes déjà repérées (harvesting fait hors-ligne — voir
 // scripts/harvest-recipe-urls, pas dans cette fonction, pour rester sous le
 // budget ~150s des edge functions). Pour chaque lot d'URLs :
-//   1. fetch + extraction du JSON-LD schema.org/Recipe (pas de Claude ici)
+//   1. fetch + extraction du schema.org/Recipe, en JSON-LD (Ricardo/SOSCuisine/
+//      Ottolenghi) ou en microdata (metro.ca) — pas de Claude ici
 //   2. UN seul appel Claude pour tout le lot, qui normalise les ingrédients
 //      au format {name,quantity,unit} et classe meal_type/diet_tags/calories/
 //      coût — pas un appel par recette, pour rester très peu coûteux (c'est
@@ -60,7 +62,8 @@ Deno.serve(async (req) => {
         });
         if (!res.ok) continue;
         const html = await res.text();
-        const recipe = extractRecipeJsonLd(html);
+        // JSON-LD d'abord (Ricardo/SOSCuisine/Ottolenghi), sinon microdata (metro.ca).
+        const recipe = extractRecipeJsonLd(html) ?? extractRecipeMicrodata(html);
         if (!recipe?.name || !recipe.recipeIngredient?.length) continue;
 
         const totalMinutes =
