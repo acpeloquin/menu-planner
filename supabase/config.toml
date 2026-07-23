@@ -28,3 +28,6 @@ verify_jwt = true
 
 [functions.scrape-store]
 verify_jwt = false
+
+[functions.populate-recipe-bank]
+verify_jwt = false

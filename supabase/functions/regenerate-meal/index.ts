@@ -2,6 +2,7 @@ import { corsHeaders } from '../_shared/cors.ts';
 import { createAdminClient } from '../_shared/supabase-admin.ts';
 import { callClaude } from '../_shared/anthropic.ts';
 import { fetchFavoriteRecipes, formatFavoritesForPrompt } from '../_shared/favorites.ts';
+import { fetchBankCandidates, formatBankForPrompt, resolveBankRecipeId } from '../_shared/recipe-bank.ts';
 
 interface RegenerateMealRequest {
   mealPlanId: string;
@@ -10,11 +11,11 @@ interface RegenerateMealRequest {
 }
 
 // Régénère un seul repas d'un plan existant, sans toucher aux autres.
-// Refuse si le créneau est verrouillé (is_locked). Compose la recette par IA
-// (pas de recherche web sur des sites de recettes) : la recherche consommait
-// beaucoup trop de tokens/coût pour la valeur ajoutée, et provoquait des
-// timeouts (504) sur generate-menu. Réutilise une recette favorite quand
-// c'est pertinent (ça ne coûte rien en tokens de recherche).
+// Refuse si le créneau est verrouillé (is_locked). Priorité : recette favorite,
+// puis recette de la banque locale (recipe_bank, extraite une fois pour toutes
+// de sites de référence), puis composition par IA en dernier recours. Pas de
+// recherche web en direct : ça consommait beaucoup trop de tokens/coût pour la
+// valeur ajoutée, et provoquait des timeouts (504) sur generate-menu.
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -60,6 +61,7 @@ Deno.serve(async (req) => {
       .eq('user_id', mealPlan.user_id);
 
     const favorites = await fetchFavoriteRecipes(supabase, mealPlan.user_id);
+    const bank = await fetchBankCandidates(supabase, [mealType]);
 
     const prompt = `Compose une recette de type "${mealType}" pour ${mealPlan.servings} portions,
 régime "${mealPlan.diets?.name ?? 'omnivore'}", préférences: ${mealPlan.preferences ?? 'aucune'}.
@@ -72,24 +74,33 @@ ingrédients si c'est cohérent avec le type de repas et le régime: ${JSON.stri
 
 Voici la banque de recettes favorites de l'utilisateur. Si l'une d'elles convient bien pour un
 repas de type "${mealType}" (ingrédients cohérents avec les aubaines/garde-manger ci-dessus,
-compatible avec le régime), PRÉFÈRE-la à une nouvelle composition — réponds alors
+compatible avec le régime), PRÉFÈRE-la à tout le reste — réponds alors
 uniquement avec {"favorite_index": number} (aucun autre champ) :
 ${formatFavoritesForPrompt(favorites)}
 
-Si aucun favori ne convient, compose une nouvelle recette. Estime aussi les calories par portion
-et le coût des ingrédients par portion en cents canadiens (cohérent avec le budget max ci-dessus).
-Réponds uniquement avec un objet JSON (aucun texte avant ou après), soit la forme favori ci-dessus,
-soit :
-{"favorite_index": null, "title": string, "ingredients": [{"name": string, "quantity": number, "unit": string}], "steps": string, "prep_time_minutes": number, "calories_per_serving": number, "estimated_cost_per_serving_cents": number, "diet_tags": string[]}`;
+Si aucun favori ne convient, voici des recettes réelles (tirées de sites de référence) disponibles
+dans la banque pour ce type de repas. PRÉFÈRE-en une à une composition par IA si elle convient bien
+(ingrédients cohérents avec les aubaines/garde-manger, compatible avec le régime/préférences) —
+réponds alors uniquement avec {"bank_index": number} (aucun autre champ) :
+${formatBankForPrompt(bank)}
+
+Si rien ne convient ni dans les favoris ni dans la banque, compose une nouvelle recette. Estime aussi
+les calories par portion et le coût des ingrédients par portion en cents canadiens (cohérent avec le
+budget max ci-dessus). Réponds uniquement avec un objet JSON (aucun texte avant ou après), une des
+3 formes ci-dessus, soit :
+{"favorite_index": null, "bank_index": null, "title": string, "ingredients": [{"name": string, "quantity": number, "unit": string}], "steps": string, "prep_time_minutes": number, "calories_per_serving": number, "estimated_cost_per_serving_cents": number, "diet_tags": string[]}`;
 
     const raw = await callClaude(prompt, { maxTokens: 4096 });
     const item = JSON.parse(extractJson(raw));
 
     const favorite = typeof item.favorite_index === 'number' ? favorites[item.favorite_index] : undefined;
+    const bankRecipe = typeof item.bank_index === 'number' ? bank[item.bank_index] : undefined;
     let recipeId: string;
 
     if (favorite) {
       recipeId = favorite.recipe_id;
+    } else if (bankRecipe) {
+      recipeId = await resolveBankRecipeId(supabase, bankRecipe);
     } else {
       const { data: recipe, error: recipeError } = await supabase
         .from('recipes')

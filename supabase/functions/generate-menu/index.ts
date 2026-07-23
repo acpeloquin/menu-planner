@@ -2,6 +2,7 @@ import { corsHeaders } from '../_shared/cors.ts';
 import { createAdminClient } from '../_shared/supabase-admin.ts';
 import { callClaude } from '../_shared/anthropic.ts';
 import { fetchFavoriteRecipes, formatFavoritesForPrompt, type FavoriteForPrompt } from '../_shared/favorites.ts';
+import { fetchBankCandidates, formatBankForPrompt, resolveBankRecipeId } from '../_shared/recipe-bank.ts';
 
 interface GenerateMenuRequest {
   mealPlanId: string;
@@ -12,15 +13,17 @@ interface GenerateMenuRequest {
 // meal_plan_recipes. Les repas verrouillés (is_locked=true) ne sont jamais
 // régénérés par cette fonction.
 //
-// Composition IA uniquement — décide de la répartition jour/type de repas,
-// de la variété, de l'usage des aubaines/garde-manger/favoris.
+// Décide de la répartition jour/type de repas, de la variété, de l'usage des
+// aubaines/garde-manger/favoris/banque de recettes. Priorité par repas :
+// favori > recette de la banque locale (recipe_bank) > composition par IA.
 //
 // Historique : on a exploré l'ancrage de chaque recette dans une vraie
-// recette trouvée par recherche web sur des sites de référence (d'abord un
-// seul repas, puis tous en parallèle, puis via des appels séparés type
-// ground-recipe). Abandonné : ça consommait beaucoup trop de tokens/coût
-// pour la valeur ajoutée, en plus d'avoir provoqué plusieurs timeouts (504)
-// en cours de route. On reste sur des recettes composées par l'IA.
+// recette trouvée par recherche web EN DIRECT sur des sites de référence
+// (d'abord un seul repas, puis tous en parallèle, puis via des appels séparés
+// type ground-recipe). Abandonné : ça consommait beaucoup trop de tokens/coût
+// pour la valeur ajoutée, en plus d'avoir provoqué plusieurs timeouts (504) en
+// cours de route. La banque de recettes (extraite une seule fois, voir
+// populate-recipe-bank) remplace maintenant cette recherche live à coût quasi nul.
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -59,7 +62,15 @@ Deno.serve(async (req) => {
 
     const favorites = await fetchFavoriteRecipes(supabase, mealPlan.user_id);
 
-    const prompt = buildMenuPrompt(mealPlan, activeDeals ?? [], lockedRecipes ?? [], pantryItems ?? [], favorites);
+    const neededMealTypes = [
+      mealPlan.num_breakfasts > 0 && 'breakfast',
+      mealPlan.num_lunches > 0 && 'lunch',
+      mealPlan.num_dinners > 0 && 'dinner',
+      mealPlan.num_snacks > 0 && 'snack',
+    ].filter((t): t is string => Boolean(t));
+    const bank = await fetchBankCandidates(supabase, neededMealTypes, 60);
+
+    const prompt = buildMenuPrompt(mealPlan, activeDeals ?? [], lockedRecipes ?? [], pantryItems ?? [], favorites, bank);
     const raw = await callClaude(prompt, { maxTokens: 16000 });
     const generated = JSON.parse(extractJson(raw));
 
@@ -69,9 +80,13 @@ Deno.serve(async (req) => {
       const favoriteIndex = item.favorite_index;
       const favorite: FavoriteForPrompt | undefined =
         typeof favoriteIndex === 'number' ? favorites[favoriteIndex] : undefined;
+      const bankIndex = item.bank_index;
+      const bankRecipe = typeof bankIndex === 'number' ? bank[bankIndex] : undefined;
 
       if (favorite) {
         recipeId = favorite.recipe_id;
+      } else if (bankRecipe) {
+        recipeId = await resolveBankRecipeId(supabase, bankRecipe);
       } else {
         const { data: recipe, error: recipeError } = await supabase
           .from('recipes')
@@ -127,6 +142,8 @@ function buildMenuPrompt(
   // deno-lint-ignore no-explicit-any
   pantryItems: any[],
   favorites: FavoriteForPrompt[],
+  // deno-lint-ignore no-explicit-any
+  bank: any[],
 ): string {
   return `Tu es un assistant de planification de repas. Génère un menu pour une semaine.
 
@@ -159,16 +176,25 @@ ingrédients correspondent bien aux aubaines et/ou au garde-manger ci-dessus et 
 au régime et aux préférences — indique alors son index dans "favorite_index" pour ce repas (les
 champs title/ingredients/steps/prep_time_minutes/diet_tags sont alors ignorés, laisse-les vides).
 Ne réutilise pas la même recette favorite plus d'une fois dans la même semaine. Si aucune ne
-convient pour un repas donné, laisse "favorite_index": null et compose une nouvelle recette
-normalement :
+convient pour un repas donné, laisse "favorite_index": null :
 ${formatFavoritesForPrompt(favorites)}
 
-Estime aussi, pour chaque recette composée, les calories par portion (champ "calories_per_serving")
-et le coût des ingrédients par portion en cents canadiens (champ "estimated_cost_per_serving_cents",
-cohérent avec le budget max ci-dessus).
+Si aucun favori ne convient pour un repas, voici des recettes réelles (tirées de sites de référence)
+disponibles dans une banque locale pour ce type de repas — PRÉFÈRE-en une à une composition par IA si
+elle convient bien (ingrédients cohérents avec les aubaines/garde-manger, compatible avec le régime/
+préférences, et dont le "meal_type" correspond au créneau à remplir) — indique alors son index dans
+"bank_index" pour ce repas (title/ingredients/steps/etc. sont alors ignorés). Ne réutilise pas la même
+recette de la banque plus d'une fois dans la même semaine :
+${formatBankForPrompt(bank)}
+
+Si ni un favori ni une recette de la banque ne conviennent pour un repas, laisse "favorite_index" et
+"bank_index" à null et compose une nouvelle recette normalement. Estime aussi, pour chaque recette
+composée, les calories par portion (champ "calories_per_serving") et le coût des ingrédients par
+portion en cents canadiens (champ "estimated_cost_per_serving_cents", cohérent avec le budget max
+ci-dessus).
 
 Réponds uniquement avec un objet JSON de la forme :
-{"meals": [{"day_index": 0-6, "meal_type": "breakfast"|"lunch"|"dinner"|"snack", "favorite_index": number|null, "title": string, "ingredients": [{"name": string, "quantity": number, "unit": string}], "steps": string, "prep_time_minutes": number, "calories_per_serving": number, "estimated_cost_per_serving_cents": number, "diet_tags": string[]}]}`;
+{"meals": [{"day_index": 0-6, "meal_type": "breakfast"|"lunch"|"dinner"|"snack", "favorite_index": number|null, "bank_index": number|null, "title": string, "ingredients": [{"name": string, "quantity": number, "unit": string}], "steps": string, "prep_time_minutes": number, "calories_per_serving": number, "estimated_cost_per_serving_cents": number, "diet_tags": string[]}]}`;
 }
 
 function extractJson(text: string): string {
