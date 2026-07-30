@@ -28,6 +28,16 @@ export async function fetchFavoriteRecipes(supabase: any, userId: string): Promi
 export function formatFavoritesForPrompt(favorites: FavoriteForPrompt[]): string {
   if (favorites.length === 0) return 'Aucune recette favorite pour l\'instant.';
   return favorites
-    .map((f, i) => `[${i}] "${f.title}" — ingrédients: ${JSON.stringify(f.ingredients)} — tags: ${JSON.stringify(f.diet_tags ?? [])}`)
+    .map((f, i) => `[${i}] "${f.title}" — ingrédients: ${JSON.stringify(ingredientNames(f.ingredients))} — tags: ${JSON.stringify(f.diet_tags ?? [])}`)
     .join('\n');
+}
+
+// Même raisonnement que formatBankForPrompt dans recipe-bank.ts : seuls les
+// noms d'ingrédients servent à juger si un favori convient, les quantités/
+// unités ne sont utiles qu'une fois le favori choisi (la recette existante
+// est alors réutilisée telle quelle via recipe_id, jamais reconstruite à
+// partir du prompt).
+function ingredientNames(ingredients: unknown): string[] {
+  if (!Array.isArray(ingredients)) return [];
+  return ingredients.map((i) => (i as { name?: string })?.name ?? String(i));
 }

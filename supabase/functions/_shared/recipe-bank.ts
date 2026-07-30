@@ -39,9 +39,19 @@ export function formatBankForPrompt(bank: BankRecipeForPrompt[]): string {
   return bank
     .map(
       (r, i) =>
-        `[${i}] "${r.title}" (${r.meal_type}) — ingrédients: ${JSON.stringify(r.ingredients)} — tags: ${JSON.stringify(r.diet_tags ?? [])} — calories/portion: ${r.calories_per_serving ?? '?'} — coût/portion: ${r.estimated_cost_per_serving_cents ?? '?'}¢`,
+        `[${i}] "${r.title}" (${r.meal_type}) — ingrédients: ${JSON.stringify(ingredientNames(r.ingredients))} — tags: ${JSON.stringify(r.diet_tags ?? [])} — calories/portion: ${r.calories_per_serving ?? '?'} — coût/portion: ${r.estimated_cost_per_serving_cents ?? '?'}¢`,
     )
     .join('\n');
+}
+
+// À l'étape de sélection, le modèle n'a besoin que des noms d'ingrédients pour
+// juger si une recette convient aux aubaines/garde-manger — quantités/unités
+// ne servent qu'une fois la recette effectivement choisie (récupérées
+// séparément via resolveBankRecipeId), inutile de les envoyer pour chaque
+// candidat de la banque.
+function ingredientNames(ingredients: unknown): string[] {
+  if (!Array.isArray(ingredients)) return [];
+  return ingredients.map((i) => (i as { name?: string })?.name ?? String(i));
 }
 
 // Un même bank_recipe peut être choisi dans plusieurs plans de repas (semaines
