@@ -37,7 +37,7 @@ Deno.serve(async (req) => {
       throw new Error(`Aucun magasin trouvé pour connector_slug: ${connectorSlugs.join(', ')}`);
     }
 
-    const results: { store: string; inserted?: number; error?: string }[] = [];
+    const results: { store: string; inserted?: number; skipped?: boolean; error?: string }[] = [];
 
     for (const store of stores) {
       const connector = store.connector_slug ? CONNECTORS[store.connector_slug] : undefined;
@@ -47,10 +47,37 @@ Deno.serve(async (req) => {
       }
 
       try {
-        const scraped: ScrapedDeal[] = await connector({
-          storeId: store.id,
-          connectorSlug: store.connector_slug!,
-        });
+        let scraped: ScrapedDeal[];
+
+        if (typeof connector === 'function') {
+          scraped = await connector({ storeId: store.id, connectorSlug: store.connector_slug! });
+        } else {
+          const { validFrom, validTo, images } = await connector.fetchFlyer();
+
+          // Une circulaire (IGA/Maxi/Super C) est valide ~7 jours et ne
+          // change pas d'un jour à l'autre, mais le cron scrape tous les
+          // magasins chaque jour (voir 0014_scrape_cron_per_connector.sql) :
+          // sans ce court-circuit, l'extraction par vision (coûteuse en
+          // tokens Claude, voir flyer-vision.ts) re-tournerait chaque jour
+          // sur la même circulaire pour rien. On ne saute que l'extraction —
+          // pas la récupération des pages, qui ne coûte que de la bande
+          // passante — et seulement si un scrape précédent a déjà produit des
+          // aubaines pour EXACTEMENT cette fenêtre de validité.
+          const { count } = await supabase
+            .from('deals')
+            .select('id', { count: 'exact', head: true })
+            .eq('store_id', store.id)
+            .eq('source', 'scraping')
+            .eq('valid_from', validFrom)
+            .eq('valid_to', validTo);
+
+          if (count && count > 0) {
+            results.push({ store: store.name, skipped: true, inserted: 0 });
+            continue;
+          }
+
+          scraped = await connector.extractDeals(images, validFrom, validTo);
+        }
 
         const rows = scraped.map((deal) => ({
           store_id: store.id,
