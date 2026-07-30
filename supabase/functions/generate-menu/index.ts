@@ -71,7 +71,14 @@ Deno.serve(async (req) => {
     const bank = await fetchBankCandidates(supabase, neededMealTypes, 60);
 
     const prompt = buildMenuPrompt(mealPlan, activeDeals ?? [], lockedRecipes ?? [], pantryItems ?? [], favorites, bank);
-    const raw = await callClaude(prompt, { maxTokens: 16000 });
+    // Sortie structurée (JSON) comme les autres appels de callClaude qui
+    // désactivent déjà la réflexion étendue — sans ça, claude-sonnet-5 peut
+    // brûler tout le budget max_tokens en réflexion invisible plutôt que de
+    // produire le JSON attendu. À reconsidérer (ex: { type: 'adaptive' }) si
+    // la qualité des menus régresse : cet appel combine plus de contraintes
+    // (variété, budget, régime, aubaines, garde-manger, favoris, banque) que
+    // les autres appels qui désactivent la réflexion.
+    const raw = await callClaude(prompt, { maxTokens: 16000, thinking: { type: 'disabled' } });
     const generated = JSON.parse(extractJson(raw));
 
     for (const item of generated.meals) {

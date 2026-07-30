@@ -90,7 +90,11 @@ budget max ci-dessus). Réponds uniquement avec un objet JSON (aucun texte avant
 3 formes ci-dessus, soit :
 {"favorite_index": null, "bank_index": null, "title": string, "ingredients": [{"name": string, "quantity": number, "unit": string}], "steps": string, "prep_time_minutes": number, "calories_per_serving": number, "estimated_cost_per_serving_cents": number, "diet_tags": string[]}`;
 
-    const raw = await callClaude(prompt, { maxTokens: 4096 });
+    // Sortie structurée (JSON), même raisonnement que dans generate-menu/index.ts :
+    // désactive la réflexion étendue pour ne pas cramer le budget max_tokens
+    // en réflexion invisible sur cette tâche à contraintes plus simples (un
+    // seul repas).
+    const raw = await callClaude(prompt, { maxTokens: 4096, thinking: { type: 'disabled' } });
     const item = JSON.parse(extractJson(raw));
 
     const favorite = typeof item.favorite_index === 'number' ? favorites[item.favorite_index] : undefined;
